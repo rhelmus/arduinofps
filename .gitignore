@@ -11,3 +11,8 @@
 *.lai
 *.la
 *.a
+
+# gforth output
+*.binbe
+*.binle
+*.lst
