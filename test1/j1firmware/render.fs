@@ -2,7 +2,7 @@ start-microcode render
 
 \ COMM interface:
 
-h# 6fff constant FRAMEBUFFER \ fb block is at end of RAM_SPRIMG
+RAM_SPRIMG constant FRAMEBUFFER \ fb block for now at RAM_SPRIMG
 d# 64 constant CHR_LINE_SIZE \ every 8 pixels 32 chars of 16 bytes --> 32 * 16 / 8 bytes per line
 d# 512 constant CHR_BLOCK_SIZE \ 32 chars of 16 bytes --> 32 * 16 bytes per block
 
