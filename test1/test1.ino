@@ -103,22 +103,6 @@ void setup()
 //    for (uint16_t i=0; i<(4096); ++i)
 //        GD.wr(FRAMEBUFFER + i, 255);
 //    GD.fill(charFromPos(0, 0), 255, 16);
-
-#if 0
-    GD.wr16(PALETTE4A + 0, RGB(0, 0, 0));
-    GD.wr16(PALETTE4A + 2, RGB(0, 0, 0));
-    GD.wr16(PALETTE4A + 4, RGB(0, 0, 0));
-    GD.wr16(PALETTE4A + 6, RGB(0, 0, 0));
-    uint8_t spr = 0;
-    for (uint16_t y=0; y<SCREEN_HEIGHT; y+=16)
-    {
-        for (uint16_t x=0; x<SCREEN_WIDTH; x+=16)
-        {
-            GD.sprite(spr, x, y + 32, 0, 8);
-            ++spr;
-        }
-    }
-#endif
 }
 
 void loop()
