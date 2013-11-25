@@ -1,9 +1,11 @@
 #include <SPI.h>
 #include <GD.h>
 
-#include "bg.h"
+#include "render.h"
 
-#define FRAMEBUFFER 0x6FFF
+#define FRAMEBUFFER RAM_SPRIMG
+
+namespace {
 
 struct SRowData
 {
@@ -14,21 +16,15 @@ struct SRowData
 
 enum
 {
-    CH_FILL1 = 50,
-    CH_FILL2,
-    CH_FILL3,
-    CH_POOLOFFSET1,
-    CH_POOLOFFSET2 = 155,
-    
     SCREEN_WIDTH = 320,
-    SCREEN_HEIGHT = 200
+    SCREEN_WIDTH_CH = SCREEN_WIDTH / 8,
+    SCREEN_HEIGHT = 200,
+    SCREEN_HEIGHT_CH = SCREEN_HEIGHT / 8
 };
 
-uint16_t atxy(uint8_t x, uint8_t y)
+uint16_t charOffset(uint8_t chx, uint8_t chy)
 {
-    // Copied from frogger tutorial
-    //return RAM_PIC + 64 * y + x;
-    return FRAMEBUFFER + 64 * y + x;
+    return chy * SCREEN_WIDTH_CH + chx;
 }
 
 void GDcopyram(uint16_t addr, uint8_t *src, uint16_t count)
@@ -41,29 +37,14 @@ void GDcopyram(uint16_t addr, uint8_t *src, uint16_t count)
     GD.__end();
 }
 
-
-uint8_t curCharPool;
-uint8_t newChar()
+uint16_t getRGBColor(uint8_t c)
 {
-    return curCharPool++;
-}
-
-void initFillChars()
-{
-    GD.wr16(RAM_PAL + (CH_FILL1 * 8), RGB(255, 0, 0));
-    GD.wr16(RAM_PAL + (CH_FILL2 * 8), RGB(0, 255, 0));
-    GD.wr16(RAM_PAL + (CH_FILL3 * 8), RGB(0, 0, 255));
-}
-
-void initChPool()
-{
-    static uint16_t chcolors[4] = { RGB(0, 0, 0), RGB(255, 0, 0), RGB(0, 255, 0), RGB(0, 0, 255) };
-    
-    for (uint8_t ch=CH_POOLOFFSET1; ch<255; ++ch)
-    {
-        for (uint8_t i=0; i<4; ++i)
-            GD.wr16(RAM_PAL + (ch * 8) + (2*i), chcolors[i]);
-    }
+    if (c == 0)
+        return RGB(255, 0, 0);
+    else if (c == 1)
+        return RGB(0, 255, 0);
+    else
+        return RGB(0, 0, 255);
 }
 
 void dumpCharCol(uint8_t chcol, struct SRowData *rowdata)
@@ -82,6 +63,7 @@ void dumpCharCol(uint8_t chcol, struct SRowData *rowdata)
     
     for (uint8_t chrow=minchtop; chrow<=maxchbottom; ++chrow)
     {
+#if 0
         bool unicolor = false;
         for (uint8_t chx=0; chx<8; ++chx)
         {
@@ -96,13 +78,13 @@ void dumpCharCol(uint8_t chcol, struct SRowData *rowdata)
 
         if (unicolor)
         {
-            GD.wr(atxy(chcol, chrow), CH_FILL1 + (rowdata[0].color-1));
+            const uint16_t choffset = charOffset(chcol, chrow);
+            GD.wr16(RAM_PAL + choffset * 8, getRGBColor(rowdata[0].color-1));
         }
         else
+#endif
         {
-            const uint8_t newch = newChar();
             const uint16_t chrowy = chrow * 8;
-            
             memset(chrawdata, 0, sizeof(chrawdata));
             
             for (uint8_t chx=0; chx<8; ++chx)
@@ -129,17 +111,10 @@ void dumpCharCol(uint8_t chcol, struct SRowData *rowdata)
                 }
             }
             
-            GDcopyram(RAM_CHR + (newch * 16), (uint8_t *)chrawdata, sizeof(chrawdata));
-            GD.wr(atxy(chcol, chrow), newch);
+            GDcopyram(FRAMEBUFFER + (charOffset(chcol, chrow) * 16), (uint8_t *)chrawdata,
+                      sizeof(chrawdata));
         }
     }
-}
-
-void updateCharScreen()
-{
-    GD.wr(COMM+0, 1); // Copy framebuffer to char memory
-    while (GD.rd(COMM+0))
-        ; // Wait till j1 is done
 }
 
 
@@ -185,25 +160,9 @@ float planeX = 0, planeY = 0.66; //the 2d raycaster version of camera plane
 void raycast()
 {
     static SRowData rowdata[SCREEN_WIDTH];
-    static uint8_t chpage;
-    uint16_t chcol = 0;
-    
-    GD.fill(FRAMEBUFFER, 0, 4096);
-    curCharPool = (chpage == 0) ? CH_POOLOFFSET1 : CH_POOLOFFSET2;
-    
-    chpage = !chpage;
     
     for (uint16_t x=0; x<SCREEN_WIDTH; ++x)
     {
-//        const uint8_t choffset = x % 8;
-//        if ((choffset == 0) && (x > 0))
-//        {
-//            dumpCharCol(chcol, rowdata);
-//            ++chcol;
-//        }
-        
-        // -----------------
-        
         //calculate ray position and direction 
         const float cameraX = 2 * x / float(SCREEN_WIDTH) - 1; //x-coordinate in camera space
         const float rayPosX = posX;
@@ -268,7 +227,8 @@ void raycast()
                 side = 1;
             }
             //Check if ray has hit a wall
-            if (worldMap[mapX][mapY] > 0) hit = 1;
+            if (worldMap[mapX][mapY] > 0)
+                hit = 1;
         }
         
         //Calculate distance projected on camera direction (oblique distance will give fisheye effect!)
@@ -282,36 +242,41 @@ void raycast()
         
         //calculate lowest and highest pixel to fill in current stripe
         int16_t drawStart = -lineHeight / 2 + SCREEN_HEIGHT / 2;
-        if(drawStart < 0)drawStart = 0;
+        if(drawStart < 0)
+            drawStart = 0;
+
         int16_t drawEnd = lineHeight / 2 + SCREEN_HEIGHT / 2;
-        if(drawEnd >= SCREEN_HEIGHT)drawEnd = SCREEN_HEIGHT - 1;
+        if(drawEnd >= SCREEN_HEIGHT)
+            drawEnd = SCREEN_HEIGHT - 1;
         
         // -----------------
         
-//        const uint8_t choffset = x % 8;
-//        rowdata[choffset].color = constrain(worldMap[mapX][mapY], 1, 3); //1/*w % 3 + 1*/;
-//        rowdata[choffset].top = drawStart; //80 - (x / 5);
-//        rowdata[choffset].bottom = drawEnd; //127 + (x / 5);
         rowdata[x].color = constrain(worldMap[mapX][mapY], 1, 3); //1/*w % 3 + 1*/;
         rowdata[x].top = drawStart; //80 - (x / 5);
         rowdata[x].bottom = drawEnd; //127 + (x / 5);
 
     }
     
+    const uint32_t ctime = millis();
+    GD.wr(COMM+0, 1); // Clear screen
+    while (GD.rd(COMM+0))
+        ; // Wait till done
+    Serial.print("ctime: "); Serial.println(millis() - ctime, DEC);
+
     const uint32_t dtime = millis();
+    uint16_t chcol = 0;
     for (uint16_t x=7; x<SCREEN_WIDTH; x+=8)
     {
-        /*const uint8_t choffset = x % 8;
-        if ((choffset == 0) && (x > 0))*/
-        {
-            dumpCharCol(chcol, &rowdata[x-7]);
-            ++chcol;
-        }
+        dumpCharCol(chcol, &rowdata[x-7]);
+        ++chcol;
     }
 
     Serial.print("dtime: "); Serial.println(millis() - dtime, DEC);
-    updateCharScreen();
 }
+
+
+}
+
 
 void setup()
 {
@@ -319,11 +284,25 @@ void setup()
     
     GD.begin();
     GD.wr16(BG_COLOR, RGB(0, 0, 0));
+    GD.fill(RAM_PIC, 255, 4 * 1024);
     
-    initFillChars();
-    initChPool();
+    // Setup framebuffer
+    for (uint8_t row=0; row<SCREEN_HEIGHT_CH; ++row)
+    {
+        for (uint8_t col=0; col<SCREEN_WIDTH_CH; ++col)
+            GD.wr(RAM_PIC + (row + 6) * 64 + col, col + ((row % 2) == 0) * SCREEN_WIDTH_CH);
+    }
+
+    // All of the same palette for now
+    for (uint16_t i=0; i<(SCREEN_WIDTH_CH * 2); ++i)
+    {
+        GD.setpal(4 * i + 0, TRANSPARENT);
+        GD.setpal(4 * i + 1, getRGBColor(0));
+        GD.setpal(4 * i + 2, getRGBColor(1));
+        GD.setpal(4 * i + 3, getRGBColor(2));
+    }
     
-    GD.microcode(bg_code, sizeof(bg_code));
+    GD.microcode(render_code, sizeof(render_code));
 }
 
 
@@ -334,6 +313,7 @@ void loop()
     
     if (uptime < curtime)
     {
+#if 1
         // ---------
         //both camera direction and camera plane must be rotated
         float moveSpeed = 5.0; //the constant value is in squares/second
@@ -345,12 +325,11 @@ void loop()
         float oldPlaneX = planeX;
         planeX = planeX * cos(-rotSpeed) - planeY * sin(-rotSpeed);
         planeY = oldPlaneX * sin(-rotSpeed) + planeY * cos(-rotSpeed);
-        
+#endif
         // ---------
         
         raycast();
         Serial.print("frame: "); Serial.println(millis() - curtime);
-        Serial.print("char pool: "); Serial.println(curCharPool, DEC);
         uptime = curtime + 150;
     }
 }

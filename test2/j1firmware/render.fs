@@ -12,6 +12,18 @@ d# 32 constant START_YLINE
 : -     invert 1+ + ;
 : >     swap < ;
 
+: checkinit ( -- )
+    \ flag set?
+    COMM+0 c@ d# 1 = if
+        FRAMEBUFFER \ start
+        dup d# 16384 + \ end
+        begin
+            d# 0 over c! \ zero out
+            1- 2dup=
+        until
+        d# 0 COMM+0 c! \ reset flag
+    then ;
+
 : main
     begin
         \ wait until VBLANK is over
@@ -23,6 +35,7 @@ d# 32 constant START_YLINE
             YLINE c@
             dup START_YLINE >
             swap END_YLINE < and
+            dup d# 0 = if checkinit then
         until
         
         \ wait until start of a character
