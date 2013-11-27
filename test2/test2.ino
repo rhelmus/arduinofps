@@ -1,6 +1,7 @@
 #include <SPI.h>
 #include <GD.h>
 
+#include "fastspi.h"
 #include "render.h"
 
 #define FRAMEBUFFER RAM_SPRIMG
@@ -47,6 +48,62 @@ uint16_t getRGBColor(uint8_t c)
         return RGB(0, 0, 255);
 }
 
+void drawScreen(struct SRowData *rowdata)
+{
+    static uint16_t chpicline[SCREEN_WIDTH];
+
+    for (uint8_t chrow=0; chrow<SCREEN_HEIGHT_CH; ++chrow)
+    {
+        const uint16_t chrowy = chrow * 8, nextchrowy = chrowy + 8;
+
+        memset(chpicline, 0, sizeof(chpicline));
+
+        for (uint16_t x=0; x<SCREEN_WIDTH; ++x)
+        {
+            if ((nextchrowy <= rowdata[x].top) || (chrowy > rowdata[x].bottom))
+                continue;
+
+            uint8_t starty = 0, endy = 7;
+
+            if ((rowdata[x].top > chrowy) && (rowdata[x].top < nextchrowy))
+                starty = rowdata[x].top - chrowy;
+            else if ((rowdata[x].bottom >= chrowy) && (rowdata[x].bottom < nextchrowy))
+                endy = rowdata[x].bottom - chrowy;
+
+            const uint8_t chx = x & 7; // chx mod 8
+            const uint16_t picx = x - chx;
+            const uint16_t cv = ((chx < 4) ? ((uint16_t)rowdata[x].color << (6 - (chx*2))) :
+                                             ((uint16_t)rowdata[x].color << (14-((chx*2)-8))));
+
+            for (uint8_t chy=starty; chy<=endy; ++chy)
+                chpicline[picx + chy] |= cv;
+        }
+
+#if 1
+        fastSPI.startTransfer(FRAMEBUFFER + (charOffset(0, chrow) * 16));
+
+        for (uint16_t i=0; i<sizeof(chpicline); ++i)
+            SPI_WRITE_8(*((uint8_t *)chpicline + i));
+
+#else
+        fastSPI.startTransfer();
+        SPI_WRITE_16(FRAMEBUFFER + (charOffset(0, chrow) * 16));
+        uint16_t count = sizeof(chpicline) / 2;
+        uint16_t *p = chpicline;
+        while (count--)
+        {
+            SPI_WRITE_16(*p);
+            ++p;
+        }
+#endif
+        fastSPI.endTransfer();
+
+//        GDcopyram(FRAMEBUFFER + (charOffset(0, chrow) * 16), (uint8_t *)chpicline,
+//                  sizeof(chpicline));
+    }
+}
+
+#if 0
 void dumpCharCol(uint8_t chcol, struct SRowData *rowdata)
 {
     static uint16_t chrawdata[8];
@@ -110,12 +167,13 @@ void dumpCharCol(uint8_t chcol, struct SRowData *rowdata)
                         chrawdata[chy] |= ((uint16_t)rowdata[chx].color << (14-((chx*2)-8)));
                 }
             }
-            
+
             GDcopyram(FRAMEBUFFER + (charOffset(chcol, chrow) * 16), (uint8_t *)chrawdata,
                       sizeof(chrawdata));
         }
     }
 }
+#endif
 
 
 #define mapWidth  24
@@ -254,26 +312,63 @@ void raycast()
         rowdata[x].color = constrain(worldMap[mapX][mapY], 1, 3); //1/*w % 3 + 1*/;
         rowdata[x].top = drawStart; //80 - (x / 5);
         rowdata[x].bottom = drawEnd; //127 + (x / 5);
-
     }
     
+#if 0
     const uint32_t ctime = millis();
     GD.wr(COMM+0, 1); // Clear screen
     while (GD.rd(COMM+0))
         ; // Wait till done
     Serial.print("ctime: "); Serial.println(millis() - ctime, DEC);
+#else
+    GD.waitvblank();
+#endif
 
     const uint32_t dtime = millis();
+#if 0
     uint16_t chcol = 0;
     for (uint16_t x=7; x<SCREEN_WIDTH; x+=8)
     {
         dumpCharCol(chcol, &rowdata[x-7]);
         ++chcol;
     }
+#else
+    drawScreen(rowdata);
+#endif
 
     Serial.print("dtime: "); Serial.println(millis() - dtime, DEC);
 }
 
+// Modified version of GD::begin()
+void beginGD()
+{
+    delay(250); // give Gameduino time to boot
+
+    fastSPI.begin();
+
+    GD.wr(J1_RESET, 1);           // HALT coprocessor
+    GD.__wstart(RAM_SPR);            // Hide all sprites
+    for (int i = 0; i < 512; i++)
+        GD.xhide();
+    GD.__end();
+    GD.fill(RAM_PIC, 0, 1024 * 10);  // Zero all character RAM
+    GD.fill(RAM_SPRPAL, 0, 2048);    // Sprite palletes black
+    GD.fill(RAM_SPRIMG, 0, 64 * 256);   // Clear all sprite data
+    GD.fill(VOICES, 0, 256);         // Silence
+    GD.fill(PALETTE16A, 0, 128);     // Black 16-, 4-palletes and COMM
+
+    GD.wr16(SCROLL_X, 0);
+    GD.wr16(SCROLL_Y, 0);
+    GD.wr(JK_MODE, 0);
+    GD.wr(SPR_DISABLE, 0);
+    GD.wr(SPR_PAGE, 0);
+    GD.wr(IOMODE, 0);
+    GD.wr16(BG_COLOR, 0);
+    GD.wr16(SAMPLE_L, 0);
+    GD.wr16(SAMPLE_R, 0);
+    GD.wr16(SCREENSHOT_Y, 0);
+    GD.wr(MODULATOR, 64);
+}
 
 }
 
@@ -282,7 +377,8 @@ void setup()
 {
     Serial.begin(115200);
     
-    GD.begin();
+//    GD.begin();
+    beginGD();
     GD.wr16(BG_COLOR, RGB(0, 0, 0));
     GD.fill(RAM_PIC, 255, 4 * 1024);
     
