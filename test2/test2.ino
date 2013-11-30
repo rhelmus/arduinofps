@@ -11,8 +11,10 @@ namespace {
 struct SRowData
 {
     uint8_t color : 4;
-    uint16_t top : 9;
-    uint16_t bottom : 9;
+    uint8_t top;
+    uint8_t bottom;
+    uint8_t texX : 6;
+    uint8_t lineHeight;
 };
 
 enum
@@ -20,8 +22,15 @@ enum
     SCREEN_WIDTH = 320,
     SCREEN_WIDTH_CH = SCREEN_WIDTH / 8,
     SCREEN_HEIGHT = 200,
-    SCREEN_HEIGHT_CH = SCREEN_HEIGHT / 8
+    SCREEN_HEIGHT_CH = SCREEN_HEIGHT / 8,
+
+    TEX_WIDTH = 64,
+    TEX_HEIGHT = 64
 };
+
+
+uint8_t texture[TEX_WIDTH * TEX_HEIGHT];
+
 
 uint16_t charOffset(uint8_t chx, uint8_t chy)
 {
@@ -51,6 +60,11 @@ uint16_t getRGBColor(uint8_t c)
 void drawScreen(struct SRowData *rowdata)
 {
     static uint16_t chpicline[SCREEN_WIDTH];
+    uint16_t colorbshift[8];
+
+    // cache this to make to avoid constant recalculations in the loops below
+    for (uint8_t i=0; i<8; ++i)
+        colorbshift[i] = ((i < 4) ? (6 - (i*2)) : (14-((i*2)-8)));
 
     for (uint8_t chrow=0; chrow<SCREEN_HEIGHT_CH; ++chrow)
     {
@@ -72,11 +86,27 @@ void drawScreen(struct SRowData *rowdata)
 
             const uint8_t chx = x & 7; // chx mod 8
             const uint16_t picx = x - chx;
-            const uint16_t cv = ((chx < 4) ? ((uint16_t)rowdata[x].color << (6 - (chx*2))) :
-                                             ((uint16_t)rowdata[x].color << (14-((chx*2)-8))));
 
+#if 0
+//            const uint16_t cv = ((chx < 4) ? ((uint16_t)rowdata[x].color << (6 - (chx*2))) :
+//                                             ((uint16_t)rowdata[x].color << (14-((chx*2)-8))));
+
+            const uint16_t cv = ((uint16_t)rowdata[x].color << colorbshift[chx]);
             for (uint8_t chy=starty; chy<=endy; ++chy)
                 chpicline[picx + chy] |= cv;
+#endif
+            for (uint8_t chy=starty; chy<=endy; ++chy)
+            {
+                // 256 and 128 factors to avoid floats
+                const uint16_t d = (chrowy + chy) * 256 - SCREEN_HEIGHT * 128 + rowdata[x].lineHeight * 128;
+                const uint8_t texY = ((d * TEX_HEIGHT) / rowdata[x].lineHeight) / 256;
+                const uint16_t cv = ((uint16_t)texture[TEX_HEIGHT * texY + rowdata[x].texX] << colorbshift[chx]);
+//                //make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
+//                if(side == 1) color = (color >> 1) & 8355711;
+//                const uint16_t cv = ((uint16_t)rowdata[x].color << colorbshift[chx]);
+                chpicline[picx + chy] |= cv;
+            }
+
         }
 
 #if 1
@@ -309,9 +339,31 @@ void raycast()
         
         // -----------------
         
-        rowdata[x].color = constrain(worldMap[mapX][mapY], 1, 3); //1/*w % 3 + 1*/;
+
+        //texturing calculations
+        rowdata[x].color = worldMap[mapX][mapY] - 1; //1 subtracted from it so that texture 0 can be used!
+
+        //calculate value of wallX
+        float wallX; //where exactly the wall was hit
+        if (side == 1)
+            wallX = rayPosX + ((mapY - rayPosY + (1 - stepY) / 2) / rayDirY) * rayDirX;
+        else
+            wallX = rayPosY + ((mapX - rayPosX + (1 - stepX) / 2) / rayDirX) * rayDirY;
+        wallX -= floor(wallX);
+
+        //x coordinate on the texture
+        uint8_t texX = uint8_t(wallX * float(TEX_WIDTH));
+        if (((side == 0) && (rayDirX > 0)) || ((side == 1) && (rayDirY < 0)))
+            texX = TEX_WIDTH - texX - 1;
+
+
+        // -------------------
+
+        // rowdata[x].color = constrain(worldMap[mapX][mapY], 1, 3); //1/*w % 3 + 1*/;
         rowdata[x].top = drawStart; //80 - (x / 5);
         rowdata[x].bottom = drawEnd; //127 + (x / 5);
+        rowdata[x].lineHeight = lineHeight;
+        rowdata[x].texX = texX;
     }
     
 #if 0
@@ -370,6 +422,32 @@ void beginGD()
     GD.wr(MODULATOR, 64);
 }
 
+void initTextures(void)
+{
+    //generate some textures
+    for(uint8_t y=0; y<TEX_HEIGHT; ++y)
+    {
+        for(uint8_t x=0; x<TEX_WIDTH; ++x)
+        {
+            texture[TEX_WIDTH * y + x] = 1 + x / (TEX_WIDTH / 3);
+#if 0
+            int xorcolor = (x * 256 / texWidth) ^ (y * 256 / texHeight);
+            //int xcolor = x * 256 / texWidth;
+            int ycolor = y * 256 / texHeight;
+            int xycolor = y * 128 / texHeight + x * 128 / texWidth;
+            texture[0][texWidth * y + x] = 65536 * 254 * (x != y && x != texWidth - y); //flat red texture with black cross
+            texture[1][texWidth * y + x] = xycolor + 256 * xycolor + 65536 * xycolor; //sloped greyscale
+            texture[2][texWidth * y + x] = 256 * xycolor + 65536 * xycolor; //sloped yellow gradient
+            texture[3][texWidth * y + x] = xorcolor + 256 * xorcolor + 65536 * xorcolor; //xor greyscale
+            texture[4][texWidth * y + x] = 256 * xorcolor; //xor green
+            texture[5][texWidth * y + x] = 65536 * 192 * (x % 16 && y % 16); //red bricks
+            texture[6][texWidth * y + x] = 65536 * ycolor; //red gradient
+            texture[7][texWidth * y + x] = 128 + 256 * 128 + 65536 * 128; //flat grey texture
+#endif
+        }
+    }
+}
+
 }
 
 
@@ -397,6 +475,8 @@ void setup()
         GD.setpal(4 * i + 2, getRGBColor(1));
         GD.setpal(4 * i + 3, getRGBColor(2));
     }
+
+    initTextures();
     
     GD.microcode(render_code, sizeof(render_code));
 }
