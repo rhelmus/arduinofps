@@ -25,7 +25,10 @@ enum
     SCREEN_HEIGHT_CH = SCREEN_HEIGHT / 8,
 
     TEX_WIDTH = 64,
-    TEX_HEIGHT = 64
+    TEX_HEIGHT = 64,
+
+    MAP_WIDTH = 24,
+    MAP_HEIGHT = 24
 };
 
 
@@ -95,123 +98,37 @@ void drawScreen(struct SRowData *rowdata)
             for (uint8_t chy=starty; chy<=endy; ++chy)
                 chpicline[picx + chy] |= cv;
 #endif
+
             for (uint8_t chy=starty; chy<=endy; ++chy)
             {
                 // 256 and 128 factors to avoid floats
+
                 const uint16_t d = (chrowy + chy) * 256 - SCREEN_HEIGHT * 128 + rowdata[x].lineHeight * 128;
                 const uint8_t texY = ((d * TEX_HEIGHT) / rowdata[x].lineHeight) / 256;
                 const uint16_t cv = ((uint16_t)texture[TEX_HEIGHT * texY + rowdata[x].texX] << colorbshift[chx]);
 //                //make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
 //                if(side == 1) color = (color >> 1) & 8355711;
 //                const uint16_t cv = ((uint16_t)rowdata[x].color << colorbshift[chx]);
+
                 chpicline[picx + chy] |= cv;
             }
 
         }
 
-#if 1
+
         fastSPI.startTransfer(FRAMEBUFFER + (charOffset(0, chrow) * 16));
 
         for (uint16_t i=0; i<sizeof(chpicline); ++i)
             SPI_WRITE_8(*((uint8_t *)chpicline + i));
 
-#else
-        fastSPI.startTransfer();
-        SPI_WRITE_16(FRAMEBUFFER + (charOffset(0, chrow) * 16));
-        uint16_t count = sizeof(chpicline) / 2;
-        uint16_t *p = chpicline;
-        while (count--)
-        {
-            SPI_WRITE_16(*p);
-            ++p;
-        }
-#endif
         fastSPI.endTransfer();
-
-//        GDcopyram(FRAMEBUFFER + (charOffset(0, chrow) * 16), (uint8_t *)chpicline,
-//                  sizeof(chpicline));
     }
 }
 
-#if 0
-void dumpCharCol(uint8_t chcol, struct SRowData *rowdata)
-{
-    static uint16_t chrawdata[8];
-    uint8_t mintop = 255, maxbottom = 0;
-    
-    for (uint8_t i=0; i<8; ++i)
-    {
-        mintop = min(mintop, rowdata[i].top);
-        maxbottom = max(maxbottom, rowdata[i].bottom);
-    }
-    
-    const uint8_t minchtop = mintop / 8;
-    const uint8_t maxchbottom = maxbottom / 8;
-    
-    for (uint8_t chrow=minchtop; chrow<=maxchbottom; ++chrow)
-    {
-#if 0
-        bool unicolor = false;
-        for (uint8_t chx=0; chx<8; ++chx)
-        {
-            const uint16_t y = chrow * 8;
-            
-            unicolor = ((rowdata[chx].top <= y) && (rowdata[chx].bottom >= (y+7)) &&
-                        ((chx == 0) || (rowdata[chx-1].color == rowdata[chx].color)));
-            
-            if (!unicolor)
-                break;
-        }
-
-        if (unicolor)
-        {
-            const uint16_t choffset = charOffset(chcol, chrow);
-            GD.wr16(RAM_PAL + choffset * 8, getRGBColor(rowdata[0].color-1));
-        }
-        else
-#endif
-        {
-            const uint16_t chrowy = chrow * 8;
-            memset(chrawdata, 0, sizeof(chrawdata));
-            
-            for (uint8_t chx=0; chx<8; ++chx)
-            {
-                if (((chrowy+8) <= rowdata[chx].top) || (chrowy > rowdata[chx].bottom))
-                    continue;
-                
-                uint8_t starty = 0, endy = 7;
-                
-                if ((rowdata[chx].top > chrowy) && (rowdata[chx].top < (chrowy + 8)))
-                    starty = rowdata[chx].top - chrowy;
-                else if ((rowdata[chx].bottom >= chrowy) && (rowdata[chx].bottom < (chrowy + 8)))
-                    endy = rowdata[chx].bottom - chrowy;
-                
-                if (chx < 4)
-                {
-                    for (uint8_t chy=starty; chy<=endy; ++chy)
-                        chrawdata[chy] |= ((uint16_t)rowdata[chx].color << (6 - (chx*2)));
-                }
-                else
-                {
-                    for (uint8_t chy=starty; chy<=endy; ++chy)
-                        chrawdata[chy] |= ((uint16_t)rowdata[chx].color << (14-((chx*2)-8)));
-                }
-            }
-
-            GDcopyram(FRAMEBUFFER + (charOffset(chcol, chrow) * 16), (uint8_t *)chrawdata,
-                      sizeof(chrawdata));
-        }
-    }
-}
-#endif
-
-
-#define mapWidth  24
-#define mapHeight 24
 
 // --------
 
-uint8_t worldMap[mapHeight][mapWidth]=
+const uint8_t worldMap[MAP_HEIGHT][MAP_WIDTH]=
 {
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
     {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
@@ -377,16 +294,7 @@ void raycast()
 #endif
 
     const uint32_t dtime = millis();
-#if 0
-    uint16_t chcol = 0;
-    for (uint16_t x=7; x<SCREEN_WIDTH; x+=8)
-    {
-        dumpCharCol(chcol, &rowdata[x-7]);
-        ++chcol;
-    }
-#else
     drawScreen(rowdata);
-#endif
 
     Serial.print("dtime: "); Serial.println(millis() - dtime, DEC);
 }
