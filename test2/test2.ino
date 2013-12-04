@@ -4,6 +4,8 @@
 #include "fastspi.h"
 #include "render.h"
 
+#include <stdint.h>
+
 #define FRAMEBUFFER RAM_SPRIMG
 
 namespace {
@@ -60,7 +62,8 @@ uint16_t getRGBColor(uint8_t c)
         return RGB(0, 0, 255);
 }
 
-void drawScreen(struct SRowData *rowdata)
+void drawScreen(struct SRowData * __restrict__ rowdata) __attribute__((optimize("-O3")));
+void drawScreen(struct SRowData * __restrict__ rowdata)
 {
     static uint16_t chpicline[SCREEN_WIDTH];
     uint16_t colorbshift[8];
@@ -69,26 +72,29 @@ void drawScreen(struct SRowData *rowdata)
     for (uint8_t i=0; i<8; ++i)
         colorbshift[i] = ((i < 4) ? (6 - (i*2)) : (14-((i*2)-8)));
 
-    for (uint8_t chrow=0; chrow<SCREEN_HEIGHT_CH; ++chrow)
+    for (uint_fast8_t chrow=0; chrow<SCREEN_HEIGHT_CH; ++chrow)
     {
-        const uint16_t chrowy = chrow * 8, nextchrowy = chrowy + 8;
+        const uint_fast16_t chrowy = chrow * 8, nextchrowy = chrowy + 8;
 
         memset(chpicline, 0, sizeof(chpicline));
 
-        for (uint16_t x=0; x<SCREEN_WIDTH; ++x)
+        for (uint_fast16_t x=0; x<SCREEN_WIDTH; ++x)
         {
             if ((nextchrowy <= rowdata[x].top) || (chrowy > rowdata[x].bottom))
                 continue;
 
-            uint8_t starty = 0, endy = 7;
+            const uint_fast8_t starty = ((rowdata[x].top > chrowy) && (rowdata[x].top < nextchrowy)) ? (rowdata[x].top - chrowy) : 0;
+            const uint_fast8_t endy = ((rowdata[x].bottom >= chrowy) && (rowdata[x].bottom < nextchrowy)) ? (rowdata[x].bottom - chrowy) : 7;
 
+#if 0
             if ((rowdata[x].top > chrowy) && (rowdata[x].top < nextchrowy))
                 starty = rowdata[x].top - chrowy;
             else if ((rowdata[x].bottom >= chrowy) && (rowdata[x].bottom < nextchrowy))
                 endy = rowdata[x].bottom - chrowy;
+#endif
 
-            const uint8_t chx = x & 7; // chx mod 8
-            const uint16_t picx = x - chx;
+            const uint_fast8_t chx = x & 7; // chx mod 8
+            const uint_fast16_t picx = x - chx;
 
 #if 0
 //            const uint16_t cv = ((chx < 4) ? ((uint16_t)rowdata[x].color << (6 - (chx*2))) :
@@ -99,26 +105,24 @@ void drawScreen(struct SRowData *rowdata)
                 chpicline[picx + chy] |= cv;
 #endif
 
-            for (uint8_t chy=starty; chy<=endy; ++chy)
+            for (uint_fast8_t chy=starty; chy<=endy; ++chy)
             {
                 // 256 and 128 factors to avoid floats
 
-                const uint16_t d = (chrowy + chy) * 256 - SCREEN_HEIGHT * 128 + rowdata[x].lineHeight * 128;
-                const uint8_t texY = ((d * TEX_HEIGHT) / rowdata[x].lineHeight) / 256;
-                const uint16_t cv = ((uint16_t)texture[TEX_HEIGHT * texY + rowdata[x].texX] << colorbshift[chx]);
+                const uint_fast16_t d = (chrowy + chy) * 256 - SCREEN_HEIGHT * 128 + rowdata[x].lineHeight * 128;
+                const uint_fast8_t texY = ((d * TEX_HEIGHT) / rowdata[x].lineHeight) / 256;
+                const uint_fast16_t cv = ((uint16_t)texture[TEX_HEIGHT * texY + rowdata[x].texX] << colorbshift[chx]);
 //                //make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
 //                if(side == 1) color = (color >> 1) & 8355711;
 //                const uint16_t cv = ((uint16_t)rowdata[x].color << colorbshift[chx]);
 
                 chpicline[picx + chy] |= cv;
             }
-
         }
-
 
         fastSPI.startTransfer(FRAMEBUFFER + (charOffset(0, chrow) * 16));
 
-        for (uint16_t i=0; i<sizeof(chpicline); ++i)
+        for (uint_fast16_t i=0; i<sizeof(chpicline); ++i)
             SPI_WRITE_8(*((uint8_t *)chpicline + i));
 
         fastSPI.endTransfer();
@@ -162,6 +166,7 @@ float planeX = 0, planeY = 0.66; //the 2d raycaster version of camera plane
 
 // --------
 
+void raycast(void) __attribute__((optimize("-O3")));
 void raycast()
 {
     static SRowData rowdata[SCREEN_WIDTH];
