@@ -106,13 +106,21 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
                 chpicline[picx + chy] |= cv;
 #endif
 
+            const fix16_t z = fix16_div(F16(TEX_HEIGHT), fix16_from_int(rowdata[x].lineHeight));
             for (uint_fast8_t chy=starty; chy<=endy; ++chy)
             {
+#if 1
                 // 256 and 128 factors to avoid floats
-
                 const uint_fast16_t d = (chrowy + chy) * 256 - SCREEN_HEIGHT * 128 + rowdata[x].lineHeight * 128;
                 const uint_fast8_t texY = ((d * TEX_HEIGHT) / rowdata[x].lineHeight) / 256;
                 const uint_fast16_t cv = ((uint16_t)texture[TEX_HEIGHT * texY + rowdata[x].texX] << colorbshift[chx]);
+#else
+                const fix16_t d = fix16_add(fix16_sub(fix16_from_int(chrowy + chy), F16(SCREEN_HEIGHT / 2)), fix16_from_int(rowdata[x].lineHeight / 2));
+//                const uint_fast16_t d = (chrowy + chy) - SCREEN_HEIGHT + rowdata[x].lineHeight;
+                const uint_fast8_t texY = fix16_to_int(fix16_mul(d, z));
+                const uint_fast16_t cv = ((uint16_t)texture[TEX_HEIGHT * texY + rowdata[x].texX] << colorbshift[chx]);
+
+#endif
 //                //make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
 //                if(side == 1) color = (color >> 1) & 8355711;
 //                const uint16_t cv = ((uint16_t)rowdata[x].color << colorbshift[chx]);
@@ -322,7 +330,6 @@ void raycast()
     for (uint16_t x=0; x<SCREEN_WIDTH; ++x)
     {
         //calculate ray position and direction
-//        const fix16_t cameraX = fix16_from_float(2 * x / float(SCREEN_WIDTH) - 1); //x-coordinate in camera space
         const fix16_t cameraX = fix16_sub(fix16_div(fix16_from_int(2 * x), F16(SCREEN_WIDTH)), F16(1)); //x-coordinate in camera space
         const fix16_t rayPosX = posX;
         const fix16_t rayPosY = posY;
@@ -338,29 +345,10 @@ void raycast()
         fix16_t sideDistY;
 
         //length of ray from one x or y-side to next x or y-side
-#if 0
-        const fix16_t deltaDistX = fix16_from_float(sqrt(1 + (fix16_to_float(rayDirY) * fix16_to_float(rayDirY)) / (fix16_to_float(rayDirX) * fix16_to_float(rayDirX))));
-        const fix16_t deltaDistY = fix16_from_float(sqrt(1 + (fix16_to_float(rayDirX) * fix16_to_float(rayDirX)) / (fix16_to_float(rayDirY) * fix16_to_float(rayDirY))));
-
-        const fix16_t deltaDistX2 = fix16_sqrt(fix16_add(F16(1), fix16_from_float((fix16_to_float(rayDirY) * fix16_to_float(rayDirY)) / (fix16_to_float(rayDirX) * fix16_to_float(rayDirX)))));
-        if (fabs(fix16_to_float(deltaDistX2) - fix16_to_float(deltaDistX)) > 0.5)
-        {
-            Serial.print("dev: "); Serial.print(fix16_to_float(deltaDistX));
-            Serial.print(", "); Serial.print(fix16_to_float(deltaDistX2));
-            Serial.print(", "); Serial.print(fix16_to_float(rayDirX));
-            Serial.print(", "); Serial.println(fix16_to_float(rayDirY));
-        }
-#elif 0
-        const fix16_t deltaDistX = fix16_sqrt(fix16_add(F16(1), fix16_from_float((fix16_to_float(rayDirY) * fix16_to_float(rayDirY)) / (fix16_to_float(rayDirX) * fix16_to_float(rayDirX)))));
-        const fix16_t deltaDistY = fix16_sqrt(fix16_add(F16(1), fix16_from_float((fix16_to_float(rayDirX) * fix16_to_float(rayDirX)) / (fix16_to_float(rayDirY) * fix16_to_float(rayDirY)))));
-#else
-        // UNDONE: too inaccurate
         const fix16_t deltaDistX = fix16_sqrt(fix16_sadd(F16(1), fix16_sdiv(fix16_sq(rayDirY), fix16_sq(rayDirX))));
         const fix16_t deltaDistY = fix16_sqrt(fix16_sadd(F16(1), fix16_sdiv(fix16_sq(rayDirX), fix16_sq(rayDirY))));
-#endif
 
-
-       fix16_t perpWallDist;
+        fix16_t perpWallDist;
 
         //what direction to step in x or y-direction (either +1 or -1)
         int8_t stepX;
@@ -412,18 +400,10 @@ void raycast()
         }
 
         //Calculate distance projected on camera direction (oblique distance will give fisheye effect!)
-#if 0
-        if (side == 0)
-            perpWallDist = fix16_from_float(fabs((mapX - fix16_to_float(rayPosX) + (1 - stepX) / 2) / fix16_to_float(rayDirX)));
-        else
-            perpWallDist = fix16_from_float(fabs((mapY - fix16_to_float(rayPosY) + (1 - stepY) / 2) / fix16_to_float(rayDirY)));
-#else
-        // perpWallDist = fabs((mapX - rayPosX + (1 - stepX) / 2) / (float)rayDirX);
         if (side == 0)
             perpWallDist = fix16_abs(fix16_div(fix16_add(fix16_sub(fix16_from_int(mapX), rayPosX), fix16_div(fix16_from_int(1 - stepX), F16(2))), rayDirX));
         else
             perpWallDist = fix16_abs(fix16_div(fix16_add(fix16_sub(fix16_from_int(mapY), rayPosY), fix16_div(fix16_from_int(1 - stepY), F16(2))), rayDirY));
-#endif
 
         //Calculate height of line to draw on screen
         int16_t lineHeight = abs(int(SCREEN_HEIGHT / fix16_to_float(perpWallDist)));
@@ -444,19 +424,6 @@ void raycast()
         rowdata[x].color = worldMap[mapX][mapY] - 1; //1 subtracted from it so that texture 0 can be used!
 
         //calculate value of wallX
-#if 0
-        float wallX; //where exactly the wall was hit
-        if (side == 1)
-            wallX = fix16_to_float(rayPosX) + ((mapY - fix16_to_float(rayPosY) + (1 - stepY) / 2) / fix16_to_float(rayDirY)) * fix16_to_float(rayDirX);
-        else
-            wallX = fix16_to_float(rayPosY) + ((mapX - fix16_to_float(rayPosX) + (1 - stepX) / 2) / fix16_to_float(rayDirX)) * fix16_to_float(rayDirY);
-        wallX -= floor(wallX);
-
-        //x coordinate on the texture
-        uint8_t texX = uint8_t(wallX * float(TEX_WIDTH));
-        if (((side == 0) && (rayDirX > 0)) || ((side == 1) && (fix16_to_float(rayDirY) < 0)))
-            texX = TEX_WIDTH - texX - 1;
-#else
         fix16_t wallX; //where exactly the wall was hit
         if (side == 1)
         {
@@ -472,7 +439,6 @@ void raycast()
         uint8_t texX = fix16_to_int(fix16_mul(wallX, F16(TEX_WIDTH)));
         if (((side == 0) && (rayDirX > 0)) || ((side == 1) && (rayDirY < 0)))
             texX = TEX_WIDTH - texX - 1;
-#endif
 
         // -------------------
 
@@ -614,40 +580,16 @@ void loop()
         planeY = oldPlaneX * sin(-rotSpeed) + planeY * cos(-rotSpeed);
 
 #else
-//        float moveSpeed = 5.0; //the constant value is in squares/second
-//        fix16_t rotSpeed = fix16_from_float(0.3 * 3.0 * 0.1);
-        float rotSpeed = 0.3 * 3.0 * 0.1;
 
-#if 0
-        fix16_t oldDirX = dirX;
-        dirX = fix16_mul(dirX, fix16_sub(fix16_cos(-rotSpeed), fix16_mul(dirY, fix16_sin(-rotSpeed))));
-        dirY = fix16_mul(oldDirX, fix16_add(fix16_sin(-rotSpeed), fix16_mul(dirY, fix16_cos(-rotSpeed))));
-#endif
+        const fix16_t rotSpeed = F16(0.3 * 3.0 * 0.1);
 
-#if 0
-        fix16_t oldDirX = dirX;
-        dirX = fix16_mul(dirX, fix16_from_float(cos(-/*fix16_to_float*/(rotSpeed)) - fix16_to_float(dirY) * sin(-/*fix16_to_float*/(rotSpeed))));
-        dirY = fix16_mul(oldDirX, fix16_from_float(sin(-/*fix16_to_float*/(rotSpeed)) + fix16_to_float(dirY) * cos(-/*fix16_to_float*/(rotSpeed))));
-#else
         const fix16_t oldDirX = dirX;
-//        dirX2 = fix16_mul(dirX, fix16_from_float(cos(-rotSpeed) - fix16_to_float(dirY) * sin(-rotSpeed)));
-        dirX = fix16_from_float(fix16_to_float(dirX) * cos(-rotSpeed) - fix16_to_float(dirY) * sin(-rotSpeed));
-        dirY = fix16_from_float(fix16_to_float(oldDirX) * sin(-rotSpeed) + fix16_to_float(dirY) * cos(-rotSpeed));
-//        Serial.print("dirX/X2: "); Serial.print(fix16_to_float(dirX));
-//        Serial.print(", "); Serial.println(fix16_to_float(dirX2));
-#endif
+        dirX = fix16_sub(fix16_mul(dirX, fix16_cos(-rotSpeed)), fix16_mul(dirY, fix16_sin(-rotSpeed)));
+        dirY = fix16_add(fix16_mul(oldDirX, fix16_sin(-rotSpeed)), fix16_mul(dirY, fix16_cos(-rotSpeed)));
 
-
-#if 1
         const fix16_t oldPlaneX = planeX;
-        planeX = fix16_from_float(fix16_to_float(planeX) * cos(-/*fix16_to_float*/(rotSpeed)) - fix16_to_float(planeY) * sin(-/*fix16_to_float*/(rotSpeed)));
-        planeY = fix16_from_float(fix16_to_float(oldPlaneX) * sin(-/*fix16_to_float*/(rotSpeed)) + fix16_to_float(planeY) * cos(-/*fix16_to_float*/(rotSpeed)));
-#else
-        const fix16_t oldPlaneX = planeX;
-        planeX = fix16_mul(planeX, fix16_from_float(cos(-/*fix16_to_float*/(rotSpeed)) - fix16_to_float(planeY) * sin(-/*fix16_to_float*/(rotSpeed))));
-        planeY = fix16_from_float(fix16_to_float(oldPlaneX) * sin(-/*fix16_to_float*/(rotSpeed)) + fix16_to_float(planeY) * cos(-/*fix16_to_float*/(rotSpeed)));
-#endif
-
+        planeX = fix16_sub(fix16_mul(planeX, fix16_cos(-rotSpeed)), fix16_mul(planeY, fix16_sin(-rotSpeed)));
+        planeY = fix16_add(fix16_mul(oldPlaneX, fix16_sin(-rotSpeed)), fix16_mul(planeY, fix16_cos(-rotSpeed)));
 #endif
         // ---------
         
