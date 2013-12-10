@@ -18,6 +18,7 @@ struct SRowData
     uint8_t bottom;
     uint8_t texX : 6;
     uint8_t lineHeight;
+    uint16_t texZ;
 };
 
 enum
@@ -73,6 +74,8 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
     for (uint8_t i=0; i<8; ++i)
         colorbshift[i] = ((i < 4) ? (6 - (i*2)) : (14-((i*2)-8)));
 
+//    uint32_t ptime = 0;
+
     for (uint_fast8_t chrow=0; chrow<SCREEN_HEIGHT_CH; ++chrow)
     {
         const uint_fast16_t chrowy = chrow * 8, nextchrowy = chrowy + 8;
@@ -86,40 +89,49 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
 
             const uint_fast8_t starty = ((rowdata[x].top > chrowy) && (rowdata[x].top < nextchrowy)) ? (rowdata[x].top - chrowy) : 0;
             const uint_fast8_t endy = ((rowdata[x].bottom >= chrowy) && (rowdata[x].bottom < nextchrowy)) ? (rowdata[x].bottom - chrowy) : 7;
-
-#if 0
-            if ((rowdata[x].top > chrowy) && (rowdata[x].top < nextchrowy))
-                starty = rowdata[x].top - chrowy;
-            else if ((rowdata[x].bottom >= chrowy) && (rowdata[x].bottom < nextchrowy))
-                endy = rowdata[x].bottom - chrowy;
-#endif
-
             const uint_fast8_t chx = x & 7; // chx mod 8
             const uint_fast16_t picx = x - chx;
 
-#if 0
-//            const uint16_t cv = ((chx < 4) ? ((uint16_t)rowdata[x].color << (6 - (chx*2))) :
-//                                             ((uint16_t)rowdata[x].color << (14-((chx*2)-8))));
-
-            const uint16_t cv = ((uint16_t)rowdata[x].color << colorbshift[chx]);
-            for (uint8_t chy=starty; chy<=endy; ++chy)
-                chpicline[picx + chy] |= cv;
+#if 1
+//            const uint_fast16_t d = chrowy * 256 - SCREEN_HEIGHT * 128 + rowdata[x].lineHeight * 128;
+            const uint_fast16_t d = (chrowy + starty) - (SCREEN_HEIGHT / 2) + (rowdata[x].lineHeight / 2);
+//            const uint_fast16_t z = 256 * TEX_HEIGHT / rowdata[x].lineHeight;
+            const uint_fast8_t startTexY = ((uint32_t)d * (uint32_t)rowdata[x].texZ) / 256;
+            uint_fast8_t index = TEX_HEIGHT * startTexY + rowdata[x].texX;
+//            Serial.print("d, z: "); Serial.print(d, DEC); Serial.print(", "); Serial.println(z, DEC);
+#else
+            const fix16_t z = fix16_div(F16(TEX_HEIGHT), fix16_from_int(rowdata[x].lineHeight));
+            const fix16_t d = fix16_add(fix16_sub(fix16_from_int(chrowy + starty), F16(SCREEN_HEIGHT / 2)), fix16_from_int(rowdata[x].lineHeight / 2));
+            const uint_fast8_t texY = fix16_to_int(fix16_mul(d, z));
+            const uint_fast8_t step = fix16_to_int(fix16_div(F16(1), z));
+            uint_fast8_t s = step;
+            uint_fast16_t index = TEX_HEIGHT * texY + rowdata[x].texX;
 #endif
 
-            const fix16_t z = fix16_div(F16(TEX_HEIGHT), fix16_from_int(rowdata[x].lineHeight));
+            const uint32_t t = micros();
             for (uint_fast8_t chy=starty; chy<=endy; ++chy)
             {
 #if 1
                 // 256 and 128 factors to avoid floats
-                const uint_fast16_t d = (chrowy + chy) * 256 - SCREEN_HEIGHT * 128 + rowdata[x].lineHeight * 128;
-                const uint_fast8_t texY = ((d * TEX_HEIGHT) / rowdata[x].lineHeight) / 256;
-                const uint_fast16_t cv = ((uint16_t)texture[TEX_HEIGHT * texY + rowdata[x].texX] << colorbshift[chx]);
+//                const uint_fast16_t d = (chrowy + chy) * 256 - SCREEN_HEIGHT * 128 + rowdata[x].lineHeight * 128;
+//                const uint_fast8_t texY = ((d * TEX_HEIGHT) / rowdata[x].lineHeight) / 256;
+//                const uint_fast8_t texY = startTexY + (((chy - starty) * rowdata[x].texZ) / 256);
+//                const uint_fast16_t cv = ((uint16_t)texture[TEX_HEIGHT * texY + rowdata[x].texX] << colorbshift[chx]);
+                const uint_fast16_t cv = ((uint16_t)texture[index] << colorbshift[chx]);
+                index += ((rowdata[x].texZ * TEX_HEIGHT) / 256);
 #else
-                const fix16_t d = fix16_add(fix16_sub(fix16_from_int(chrowy + chy), F16(SCREEN_HEIGHT / 2)), fix16_from_int(rowdata[x].lineHeight / 2));
+//                const fix16_t d = fix16_add(fix16_sub(fix16_from_int(chrowy + chy), F16(SCREEN_HEIGHT / 2)), fix16_from_int(rowdata[x].lineHeight / 2));
 //                const uint_fast16_t d = (chrowy + chy) - SCREEN_HEIGHT + rowdata[x].lineHeight;
-                const uint_fast8_t texY = fix16_to_int(fix16_mul(d, z));
-                const uint_fast16_t cv = ((uint16_t)texture[TEX_HEIGHT * texY + rowdata[x].texX] << colorbshift[chx]);
+//                const uint_fast8_t texY = fix16_to_int(fix16_mul(d, z));
+                const uint_fast16_t cv = ((uint16_t)texture[/*TEX_HEIGHT * texY + rowdata[x].texX*/index] << colorbshift[chx]);
 
+                --s;
+                if (s == 0)
+                {
+//                    texY = fix16_add(texY, z);
+                    index += TEX_HEIGHT;
+                    s = step;
+                }
 #endif
 //                //make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
 //                if(side == 1) color = (color >> 1) & 8355711;
@@ -127,6 +139,8 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
 
                 chpicline[picx + chy] |= cv;
             }
+
+//            ptime += (micros() - t);
         }
 
         fastSPI.startTransfer(FRAMEBUFFER + (charOffset(0, chrow) * 16));
@@ -136,6 +150,8 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
 
         fastSPI.endTransfer();
     }
+
+//    Serial.print("ptime: "); Serial.println(ptime / 1000);
 }
 
 
@@ -447,6 +463,7 @@ void raycast()
         rowdata[x].bottom = drawEnd; //127 + (x / 5);
         rowdata[x].lineHeight = lineHeight;
         rowdata[x].texX = texX;
+        rowdata[x].texZ = 256 * TEX_HEIGHT / rowdata[x].lineHeight;
     }
 
 #if 0
