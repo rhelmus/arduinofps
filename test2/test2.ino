@@ -87,68 +87,50 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
             if ((nextchrowy <= rowdata[x].top) || (chrowy > rowdata[x].bottom))
                 continue;
 
-            const uint_fast8_t starty = ((rowdata[x].top > chrowy) && (rowdata[x].top < nextchrowy)) ? (rowdata[x].top - chrowy) : 0;
-            const uint_fast8_t endy = ((rowdata[x].bottom >= chrowy) && (rowdata[x].bottom < nextchrowy)) ? (rowdata[x].bottom - chrowy) : 7;
+            const uint_fast8_t starty = (rowdata[x].top > chrowy) ? (rowdata[x].top - chrowy) : 0;
+            const uint_fast8_t endy = (rowdata[x].bottom < nextchrowy) ? (rowdata[x].bottom - chrowy) : 7;
             const uint_fast8_t chx = x & 7; // chx mod 8
             const uint_fast16_t picx = x - chx;
 
-#if 1
-//            const uint_fast16_t d = chrowy * 256 - SCREEN_HEIGHT * 128 + rowdata[x].lineHeight * 128;
             const uint_fast16_t d = (chrowy + starty) - (SCREEN_HEIGHT / 2) + (rowdata[x].lineHeight / 2);
-//            const uint_fast16_t z = 256 * TEX_HEIGHT / rowdata[x].lineHeight;
             const uint_fast8_t startTexY = ((uint32_t)d * (uint32_t)rowdata[x].texZ) / 256;
-            uint_fast8_t index = TEX_HEIGHT * startTexY + rowdata[x].texX;
-//            Serial.print("d, z: "); Serial.print(d, DEC); Serial.print(", "); Serial.println(z, DEC);
-#else
-            const fix16_t z = fix16_div(F16(TEX_HEIGHT), fix16_from_int(rowdata[x].lineHeight));
-            const fix16_t d = fix16_add(fix16_sub(fix16_from_int(chrowy + starty), F16(SCREEN_HEIGHT / 2)), fix16_from_int(rowdata[x].lineHeight / 2));
-            const uint_fast8_t texY = fix16_to_int(fix16_mul(d, z));
-            const uint_fast8_t step = fix16_to_int(fix16_div(F16(1), z));
-            uint_fast8_t s = step;
-            uint_fast16_t index = TEX_HEIGHT * texY + rowdata[x].texX;
-#endif
+//            const uint_fast16_t step = rowdata[x].texZ * TEX_HEIGHT;
+//            const uint_fast8_t sindex = TEX_HEIGHT * startTexY + rowdata[x].texX;
+//            uint_fast8_t index = sindex;
+//            const uint_fast16_t step = max(256 / rowdata[x].texZ, 1);
 
-            const uint32_t t = micros();
             for (uint_fast8_t chy=starty; chy<=endy; ++chy)
             {
-#if 1
-                // 256 and 128 factors to avoid floats
-//                const uint_fast16_t d = (chrowy + chy) * 256 - SCREEN_HEIGHT * 128 + rowdata[x].lineHeight * 128;
-//                const uint_fast8_t texY = ((d * TEX_HEIGHT) / rowdata[x].lineHeight) / 256;
-//                const uint_fast8_t texY = startTexY + (((chy - starty) * rowdata[x].texZ) / 256);
-//                const uint_fast16_t cv = ((uint16_t)texture[TEX_HEIGHT * texY + rowdata[x].texX] << colorbshift[chx]);
-                const uint_fast16_t cv = ((uint16_t)texture[index] << colorbshift[chx]);
-                index += ((rowdata[x].texZ * TEX_HEIGHT) / 256);
-#else
-//                const fix16_t d = fix16_add(fix16_sub(fix16_from_int(chrowy + chy), F16(SCREEN_HEIGHT / 2)), fix16_from_int(rowdata[x].lineHeight / 2));
-//                const uint_fast16_t d = (chrowy + chy) - SCREEN_HEIGHT + rowdata[x].lineHeight;
-//                const uint_fast8_t texY = fix16_to_int(fix16_mul(d, z));
-                const uint_fast16_t cv = ((uint16_t)texture[/*TEX_HEIGHT * texY + rowdata[x].texX*/index] << colorbshift[chx]);
+//                const uint32_t t = micros();
 
-                --s;
-                if (s == 0)
-                {
-//                    texY = fix16_add(texY, z);
-                    index += TEX_HEIGHT;
-                    s = step;
-                }
-#endif
-//                //make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
+                const uint_fast8_t texY = startTexY + (((chy - starty) * rowdata[x].texZ) / 256);
+//                const uint_fast16_t cv = ((uint16_t)texture[TEX_HEIGHT * texY + rowdata[x].texX] << colorbshift[chx]);
+                // UNDONE: rotate texture
+                const uint_fast16_t cv = ((uint16_t)texture[TEX_HEIGHT * rowdata[x].texX + texY] << colorbshift[chx]);
+
+//                const uint_fast16_t cv = ((uint16_t)texture[index] << colorbshift[chx]);
+//                index = sindex + (((chy - starty) * step) / 256);
+
+                //make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
 //                if(side == 1) color = (color >> 1) & 8355711;
 //                const uint16_t cv = ((uint16_t)rowdata[x].color << colorbshift[chx]);
 
                 chpicline[picx + chy] |= cv;
-            }
 
-//            ptime += (micros() - t);
+//                ptime += (micros() - t);
+            }
         }
 
+#if 1
         fastSPI.startTransfer(FRAMEBUFFER + (charOffset(0, chrow) * 16));
 
         for (uint_fast16_t i=0; i<sizeof(chpicline); ++i)
             SPI_WRITE_8(*((uint8_t *)chpicline + i));
 
         fastSPI.endTransfer();
+#else
+        GDcopyram(FRAMEBUFFER + (charOffset(0, chrow) * 16), (uint8_t *)chpicline, sizeof(chpicline));
+#endif
     }
 
 //    Serial.print("ptime: "); Serial.println(ptime / 1000);
