@@ -93,14 +93,12 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
             const uint_fast16_t picx = x - chx;
 
             const uint_fast16_t d = (chrowy + starty) - (SCREEN_HEIGHT / 2) + (rowdata[x].lineHeight / 2);
-            const uint_fast8_t startTexY = ((uint32_t)d * (uint32_t)rowdata[x].texZ) / 256;
-//            const uint_fast16_t step = rowdata[x].texZ * TEX_HEIGHT;
-//            const uint_fast8_t sindex = TEX_HEIGHT * startTexY + rowdata[x].texX;
-//            uint_fast8_t index = sindex;
-//            const uint_fast16_t step = max(256 / rowdata[x].texZ, 1);
+//            const uint_fast8_t startTexY = ((uint32_t)d * (uint32_t)rowdata[x].texZ) / 256;
+            uint_fast16_t texY = ((uint32_t)d * (uint32_t)rowdata[x].texZ);
 
             for (uint_fast8_t chy=starty; chy<=endy; ++chy)
             {
+#if 0
 //                const uint32_t t = micros();
 
                 const uint_fast8_t texY = startTexY + (((chy - starty) * rowdata[x].texZ) / 256);
@@ -108,14 +106,17 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
                 // UNDONE: rotate texture
                 const uint_fast16_t cv = ((uint16_t)texture[TEX_HEIGHT * rowdata[x].texX + texY] << colorbshift[chx]);
 
-//                const uint_fast16_t cv = ((uint16_t)texture[index] << colorbshift[chx]);
-//                index = sindex + (((chy - starty) * step) / 256);
 
                 //make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
 //                if(side == 1) color = (color >> 1) & 8355711;
 //                const uint16_t cv = ((uint16_t)rowdata[x].color << colorbshift[chx]);
+#endif
 
+                // UNDONE: rotate texture
+                const uint_fast16_t cv = ((uint16_t)texture[TEX_HEIGHT * rowdata[x].texX + (texY/256)] << colorbshift[chx]);
                 chpicline[picx + chy] |= cv;
+
+                texY += rowdata[x].texZ;
 
 //                ptime += (micros() - t);
             }
