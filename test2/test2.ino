@@ -87,6 +87,118 @@ uint16_t getRGBColor(uint8_t c)
 }
 
 void drawScreen(struct SRowData * __restrict__ rowdata) __attribute__((optimize("-O3")));
+
+#ifdef USE_SPIFIFO
+
+void drawScreen(struct SRowData * __restrict__ rowdata)
+{
+    uint16_t colorbshift[8];
+
+    // cache this to make to avoid constant recalculations in the loops below
+    for (uint8_t i=0; i<8; ++i)
+        colorbshift[7-i] = ((i < 4) ? (6 - (i*2)) : (14-((i*2)-8)));
+
+//    uint32_t ptime = 0;
+
+    uint16_t curch[8];
+    memset(curch, 0, sizeof(curch));
+
+#if 0
+#else
+    SPIFIFO.write16(FRAMEBUFFER | 0x8000, SPI_CONTINUE);
+    SPIFIFO.read();
+#endif
+
+    for (uint_fast8_t chrow=0; chrow<SCREEN_HEIGHT_CH; ++chrow)
+    {
+        const uint_fast16_t chrowy = chrow * 8, nextchrowy = chrowy + 8;
+
+        for (uint_fast16_t x=0; x<SCREEN_WIDTH; ++x)
+        {
+            const uint_fast8_t chx = x & 7; // chx mod 8
+
+            if (x && !chx)
+            {
+#if 0
+                GDcopyram(FRAMEBUFFER + (charOffset(x/8, chrow) * 16), (uint8_t *)curch, sizeof(curch));
+                memset(curch, 0, sizeof(curch));
+#else
+                // First write?
+                if (!chrow && (x == 8))
+                {
+                    // Fill FIFO
+                    SPIFIFO.write16(curch[0], SPI_CONTINUE);
+                    SPIFIFO.write16(curch[1], SPI_CONTINUE);
+                    SPIFIFO.write16(curch[2], SPI_CONTINUE);
+
+                    for (uint_fast8_t i=3; i<8; ++i)
+                    {
+                        SPIFIFO.write16(curch[i], SPI_CONTINUE);
+                        SPIFIFO.read();
+                    }
+                }
+                else
+                {
+                    for (uint_fast8_t i=0; i<8; ++i)
+                    {
+                        SPIFIFO.write16(curch[i], SPI_CONTINUE);
+                        SPIFIFO.read();
+                    }
+                }
+                memset(curch, 0, sizeof(curch));
+#endif
+            }
+
+            if ((nextchrowy <= rowdata[x].top) || (chrowy > rowdata[x].bottom))
+                continue;
+
+            const uint_fast8_t starty = (rowdata[x].top > chrowy) ? (rowdata[x].top - chrowy) : 0;
+            const uint_fast8_t endy = (rowdata[x].bottom < nextchrowy) ? (rowdata[x].bottom - chrowy) : 7;
+
+            const uint_fast16_t d = (chrowy + starty) - (SCREEN_HEIGHT / 2) + (rowdata[x].lineHeight / 2);
+            uint_fast16_t texY = ((uint32_t)d * (uint32_t)rowdata[x].texZ);
+
+            for (uint_fast8_t chy=starty; chy<=endy; ++chy)
+            {
+                // UNDONE: rotate texture
+                curch[chy] |= ((uint16_t)texture[TEX_HEIGHT * rowdata[x].texX + (texY/256)] << colorbshift[chx]);
+
+                texY += rowdata[x].texZ;
+
+//                ptime += (micros() - t);
+            }
+        }
+
+#if 0
+        GDcopyram(FRAMEBUFFER + (charOffset(SCREEN_WIDTH_CH-1, chrow) * 16), (uint8_t *)curch, sizeof(curch));
+        memset(curch, 0, sizeof(curch));
+#else
+        for (uint_fast8_t i=0; i<8; ++i)
+        {
+            SPIFIFO.write16(curch[i], SPI_CONTINUE);
+            SPIFIFO.read();
+        }
+        memset(curch, 0, sizeof(curch));
+#endif
+    }
+
+#if 0
+#else
+    // UNDONE
+    SPIFIFO.write(0);
+    SPIFIFO.read();
+
+    // Empty FIFO
+    SPIFIFO.read();
+    SPIFIFO.read();
+    SPIFIFO.read();
+#endif
+
+//    Serial.print("ptime: "); Serial.println(ptime / 1000);
+}
+
+#else
+
 void drawScreen(struct SRowData * __restrict__ rowdata)
 {
     static uint16_t chpicline[SCREEN_WIDTH];
@@ -178,7 +290,7 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
 
 //    Serial.print("ptime: "); Serial.println(ptime / 1000);
 }
-
+#endif
 
 // --------
 
@@ -477,17 +589,17 @@ void raycast()
         wallX = fix16_sub(wallX, fix16_floor(wallX));
 
         //x coordinate on the texture
-        uint8_t texX = fix16_to_int(fix16_mul(wallX, F16(TEX_WIDTH)));
         if (((side == 0) && (rayDirX > 0)) || ((side == 1) && (rayDirY < 0)))
-            texX = TEX_WIDTH - texX - 1;
+            rowdata[x].texX = TEX_WIDTH - texX - 1;
+        else
+            rowdata[x].texX = fix16_to_int(fix16_mul(wallX, F16(TEX_WIDTH)));
 
         // -------------------
 
         // rowdata[x].color = constrain(worldMap[mapX][mapY], 1, 3); //1/*w % 3 + 1*/;
-        rowdata[x].top = drawStart; //80 - (x / 5);
-        rowdata[x].bottom = drawEnd; //127 + (x / 5);
+        rowdata[x].top = drawStart;
+        rowdata[x].bottom = drawEnd;
         rowdata[x].lineHeight = lineHeight;
-        rowdata[x].texX = texX;
         rowdata[x].texZ = 256 * TEX_HEIGHT / rowdata[x].lineHeight;
     }
 
