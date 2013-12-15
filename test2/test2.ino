@@ -1,11 +1,19 @@
-#include <SPI.h>
-#include <GD.h>
-
-#include "fastspi.h"
-#include "fixmath.h"
-#include "render.h"
+#define USE_SPIFIFO
 
 #include <stdint.h>
+
+#ifdef USE_SPIFIFO
+#include <Arduino.h>
+#include <SPIFIFO.h>
+#include <GDT3.h>
+#else
+#include <SPI.h>
+#include <GD.h>
+#include "fastspi.h"
+#endif
+
+#include "fixmath.h"
+#include "render.h"
 
 #define FRAMEBUFFER RAM_SPRIMG
 
@@ -47,10 +55,24 @@ uint16_t charOffset(uint8_t chx, uint8_t chy)
 void GDcopyram(uint16_t addr, uint8_t *src, uint16_t count)
 {
     GD.__wstart(addr);
-    while (count--) {
+    while (count > 1) {
+#ifdef USE_SPIFIFO
+        SPIFIFO.write(*src, SPI_CONTINUE);
+        SPIFIFO.read();
+#else
         SPI.transfer(*src);
+#endif
         ++src;
+        --count;
     }
+
+#ifdef USE_SPIFIFO
+        SPIFIFO.write(*src);
+        SPIFIFO.read();
+#else
+        SPI.transfer(*src);
+#endif
+
     GD.__end();
 }
 
@@ -122,15 +144,35 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
             }
         }
 
-#if 1
+#if 0
+        GDcopyram(FRAMEBUFFER + (charOffset(0, chrow) * 16), (uint8_t *)chpicline, sizeof(chpicline));
+#else
+#ifdef USE_SPIFIFO
+        SPIFIFO.write16((FRAMEBUFFER + (charOffset(0, chrow) * 16)) | 0x8000, SPI_CONTINUE);
+        SPIFIFO.read();
+
+        const uint_fast16_t endi = (sizeof(chpicline) / sizeof(chpicline[0])) - 1;
+
+        for (uint_fast16_t i=0; i<endi; ++i)
+        {
+            //SPIFIFO.write16(chpicline[i], SPI_CONTINUE);
+//            SPIFIFO.read();
+            SPIFIFO.write(lowByte(chpicline[i]), SPI_CONTINUE);
+            SPIFIFO.read();
+            SPIFIFO.write(highByte(chpicline[i]), SPI_CONTINUE);
+            SPIFIFO.read();
+        }
+
+        SPIFIFO.write16(chpicline[endi-1]);
+        SPIFIFO.read();
+#else
         fastSPI.startTransfer(FRAMEBUFFER + (charOffset(0, chrow) * 16));
 
         for (uint_fast16_t i=0; i<sizeof(chpicline); ++i)
             SPI_WRITE_8(*((uint8_t *)chpicline + i));
 
         fastSPI.endTransfer();
-#else
-        GDcopyram(FRAMEBUFFER + (charOffset(0, chrow) * 16), (uint8_t *)chpicline, sizeof(chpicline));
+#endif
 #endif
     }
 
@@ -468,6 +510,7 @@ void raycast()
 #endif
 
 
+#ifndef USE_SPIFIFO
 // Modified version of GD::begin()
 void beginGD()
 {
@@ -498,6 +541,7 @@ void beginGD()
     GD.wr16(SCREENSHOT_Y, 0);
     GD.wr(MODULATOR, 64);
 }
+#endif
 
 void initTextures(void)
 {
@@ -531,9 +575,41 @@ void initTextures(void)
 void setup()
 {
     Serial.begin(115200);
-    
-//    GD.begin();
+
+#ifdef USE_SPIFIFO
+
+#if 0
+    SPIFIFO.begin(9, SPI_CLOCK_8MHz);
+    delay(4000);
+
+    SPIFIFO.write(0x28, true);
+    Serial.print("ret: "); Serial.println(SPIFIFO.read(), HEX);
+    SPIFIFO.write(0x00, true);
+    Serial.print("ret: "); Serial.println(SPIFIFO.read(), HEX);
+    SPIFIFO.write(0x00, false);
+    Serial.print("ret: "); Serial.println(SPIFIFO.read(), HEX);
+
+    SPIFIFO.write16(0x8000, true);
+    Serial.print("ret: "); Serial.println(SPIFIFO.read(), HEX);
+    /*SPIFIFO.write(0x00, true);
+    Serial.print("ret: "); Serial.println(SPIFIFO.read(), HEX);*/
+    SPIFIFO.write(0x41, false);
+    Serial.print("ret: "); Serial.println(SPIFIFO.read(), HEX);
+
+    return;
+#else
+    GD.begin();
+    /*SPIFIFO.begin(9, SPI_CLOCK_8MHz);
+    delay(4000);
+    Serial.print("ret: "); Serial.println(GD.rd(0x2800), HEX);*/
+//    GD.wr(0x8000, 0x41);
+//    return;
+#endif
+
+#else
     beginGD();
+#endif
+
     GD.wr16(BG_COLOR, RGB(0, 0, 0));
     GD.fill(RAM_PIC, 255, 4 * 1024);
     
@@ -544,18 +620,45 @@ void setup()
             GD.wr(RAM_PIC + (row + 6) * 64 + col, col + ((row % 2) == 0) * SCREEN_WIDTH_CH);
     }
 
+#if 1
     // All of the same palette for now
     for (uint16_t i=0; i<(SCREEN_WIDTH_CH * 2); ++i)
     {
-        GD.setpal(4 * i + 0, TRANSPARENT);
+        GD.wr16(RAM_PAL + (i * 8), TRANSPARENT);
+        GD.wr16(RAM_PAL + (i * 8) + 2, getRGBColor(0));
+        GD.wr16(RAM_PAL + (i * 8) + 4, getRGBColor(1));
+        GD.wr16(RAM_PAL + (i * 8) + 6, RGB(0, 0, 255));
+        /*GD.setpal(4 * i + 0, TRANSPARENT);
         GD.setpal(4 * i + 1, getRGBColor(0));
         GD.setpal(4 * i + 2, getRGBColor(1));
-        GD.setpal(4 * i + 3, getRGBColor(2));
+        GD.setpal(4 * i + 3, getRGBColor(2));*/
     }
+#else
+    GD.wr16(RAM_PAL + SCREEN_WIDTH + 0, TRANSPARENT);
+    GD.wr16(RAM_PAL + SCREEN_WIDTH + 2, RGB(255, 0, 0));
+    GD.wr16(RAM_PAL + SCREEN_WIDTH + 4, RGB(255, 255, 0));
+    GD.wr16(RAM_PAL + SCREEN_WIDTH + 6, RGB(255, 0, 0));
+//    GD.fill(RAM_PAL, 0x55, SCREEN_WIDTH * 2);
+#endif
 
     initTextures();
     
     GD.microcode(render_code, sizeof(render_code));
+
+#if 0
+    for (uint8_t i=0; i<16; ++i)
+        GD.wr(FRAMEBUFFER + i, 0xFF);
+
+//    GD.fill(FRAMEBUFFER, 0xFF, 16 * SCREEN_WIDTH_CH * SCREEN_HEIGHT_CH);
+
+    delay(2500);
+    Serial.print("rd: ");
+
+    for (uint16_t i=0; i<8; ++i)
+    {
+        Serial.println(GD.rd16(FRAMEBUFFER + (i*2)));
+    }
+#endif
 }
 
 

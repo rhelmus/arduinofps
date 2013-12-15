@@ -12,7 +12,7 @@ void CFastSPI::begin()
     SPI.begin();
     SPI.setBitOrder(MSBFIRST);
     SPI.setDataMode(SPI_MODE0);
-    digitalWrite(9, HIGH);
+    digitalWrite(PIN_CS, HIGH);
 
     // Now reconfigure some stuff
 
