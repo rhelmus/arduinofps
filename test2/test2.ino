@@ -479,19 +479,23 @@ void raycast()
 void raycast()
 {
     static SRowData rowdata[SCREEN_WIDTH];
+    const uint_fast8_t iposx = fix16_to_int(posX);
+    const uint_fast8_t iposy = fix16_to_int(posY);
 
-    for (uint16_t x=0; x<SCREEN_WIDTH; ++x)
+    fix16_t cameraX = F16(-1); //x-coordinate in camera space
+    const fix16_t camxincr = fix16_div(F16(2), F16(SCREEN_WIDTH));
+
+    for (uint_fast16_t x=0; x<SCREEN_WIDTH; ++x)
     {
         //calculate ray position and direction
-        const fix16_t cameraX = fix16_sub(fix16_div(fix16_from_int(2 * x), F16(SCREEN_WIDTH)), F16(1)); //x-coordinate in camera space
-        const fix16_t rayPosX = posX;
-        const fix16_t rayPosY = posY;
-        const fix16_t rayDirX = fix16_add(dirX, fix16_mul(planeX, (cameraX)));
-        const fix16_t rayDirY = fix16_add(dirY, fix16_mul(planeY, (cameraX)));
+        const fix16_t rayDirX = fix16_add(dirX, fix16_mul(planeX, cameraX));
+        const fix16_t rayDirY = fix16_add(dirY, fix16_mul(planeY, cameraX));
+
+        cameraX = fix16_add(cameraX, camxincr);
 
         //which box of the map we're in
-        uint8_t mapX = fix16_to_int(rayPosX);
-        uint8_t mapY = fix16_to_int(rayPosY);
+        uint_fast8_t mapX = iposx;
+        uint_fast8_t mapY = iposy;
 
         //length of ray from current position to next x or y-side
         fix16_t sideDistX;
@@ -504,35 +508,34 @@ void raycast()
         fix16_t perpWallDist;
 
         //what direction to step in x or y-direction (either +1 or -1)
-        int8_t stepX;
-        int8_t stepY;
+        int_fast8_t stepX;
+        int_fast8_t stepY;
 
-        int hit = 0; //was there a wall hit?
-        int side; //was a NS or a EW wall hit?
+        uint_fast8_t side; //was a NS or a EW wall hit?
         //calculate step and initial sideDist
         if (rayDirX < 0)
         {
             stepX = -1;
-            sideDistX = fix16_mul(fix16_sub(rayPosX, fix16_from_int(mapX)), deltaDistX);
+            sideDistX = fix16_mul(fix16_sub(posX, fix16_from_int(mapX)), deltaDistX);
         }
         else
         {
             stepX = 1;
-            sideDistX = fix16_mul(fix16_sub(fix16_from_int(mapX + 1), rayPosX), deltaDistX);
+            sideDistX = fix16_mul(fix16_sub(fix16_from_int(mapX + 1), posX), deltaDistX);
         }
         if (rayDirY < 0)
         {
             stepY = -1;
-            sideDistY = fix16_mul(fix16_sub(rayPosY, fix16_from_int(mapY)), deltaDistY);
+            sideDistY = fix16_mul(fix16_sub(posY, fix16_from_int(mapY)), deltaDistY);
         }
         else
         {
             stepY = 1;
-            sideDistY = fix16_mul(fix16_sub(fix16_from_int(mapY + 1), rayPosY), deltaDistY);
+            sideDistY = fix16_mul(fix16_sub(fix16_from_int(mapY + 1), posY), deltaDistY);
         }
 
         //perform DDA
-        while (hit == 0)
+        do
         {
             //jump to next map square, OR in x-direction, OR in y-direction
             if (sideDistX < sideDistY)
@@ -547,27 +550,25 @@ void raycast()
                 mapY += stepY;
                 side = 1;
             }
-            //Check if ray has hit a wall
-            if (worldMap[mapX][mapY] > 0)
-                hit = 1;
         }
+        while (worldMap[mapX][mapY] == 0);
 
         //Calculate distance projected on camera direction (oblique distance will give fisheye effect!)
         if (side == 0)
-            perpWallDist = fix16_abs(fix16_div(fix16_add(fix16_sub(fix16_from_int(mapX), rayPosX), fix16_div(fix16_from_int(1 - stepX), F16(2))), rayDirX));
+            perpWallDist = fix16_abs(fix16_div(fix16_add(fix16_sub(fix16_from_int(mapX), posX), fix16_div(fix16_from_int(1 - stepX), F16(2))), rayDirX));
         else
-            perpWallDist = fix16_abs(fix16_div(fix16_add(fix16_sub(fix16_from_int(mapY), rayPosY), fix16_div(fix16_from_int(1 - stepY), F16(2))), rayDirY));
+            perpWallDist = fix16_abs(fix16_div(fix16_add(fix16_sub(fix16_from_int(mapY), posY), fix16_div(fix16_from_int(1 - stepY), F16(2))), rayDirY));
 
         //Calculate height of line to draw on screen
-        int16_t lineHeight = abs(int(SCREEN_HEIGHT / fix16_to_float(perpWallDist)));
+        const uint16_t lineHeight = fix16_to_int(fix16_div(F16(SCREEN_HEIGHT), perpWallDist));
 
         //calculate lowest and highest pixel to fill in current stripe
-        int16_t drawStart = -lineHeight / 2 + SCREEN_HEIGHT / 2;
-        if(drawStart < 0)
+        int_fast16_t drawStart = -lineHeight / 2 + SCREEN_HEIGHT / 2;
+        if (drawStart < 0)
             drawStart = 0;
 
-        int16_t drawEnd = lineHeight / 2 + SCREEN_HEIGHT / 2;
-        if(drawEnd >= SCREEN_HEIGHT)
+        uint_fast16_t drawEnd = lineHeight / 2 + SCREEN_HEIGHT / 2;
+        if (drawEnd >= SCREEN_HEIGHT)
             drawEnd = SCREEN_HEIGHT - 1;
 
         // -----------------
@@ -579,20 +580,16 @@ void raycast()
         //calculate value of wallX
         fix16_t wallX; //where exactly the wall was hit
         if (side == 1)
-        {
-//            wallX = rayPosX + ((mapY - rayPosY + (1 - stepY) / 2) / rayDirY) * rayDirX;
-            wallX = fix16_add(rayPosX, fix16_mul(fix16_div(fix16_add(fix16_sub(fix16_from_int(mapY), rayPosY), fix16_div(fix16_from_int(1 - stepY), F16(2))), rayDirY), rayDirX));
-
-        }
+            wallX = fix16_add(posX, fix16_mul(fix16_div(fix16_add(fix16_sub(fix16_from_int(mapY), posY), fix16_div(fix16_from_int(1 - stepY), F16(2))), rayDirY), rayDirX));
         else
-            wallX = fix16_add(rayPosY, fix16_mul(fix16_div(fix16_add(fix16_sub(fix16_from_int(mapX), rayPosX), fix16_div(fix16_from_int(1 - stepX), F16(2))), rayDirX), rayDirY));
+            wallX = fix16_add(posY, fix16_mul(fix16_div(fix16_add(fix16_sub(fix16_from_int(mapX), posX), fix16_div(fix16_from_int(1 - stepX), F16(2))), rayDirX), rayDirY));
         wallX = fix16_sub(wallX, fix16_floor(wallX));
 
         //x coordinate on the texture
+        rowdata[x].texX = fix16_to_int(fix16_mul(wallX, F16(TEX_WIDTH)));
         if (((side == 0) && (rayDirX > 0)) || ((side == 1) && (rayDirY < 0)))
-            rowdata[x].texX = TEX_WIDTH - texX - 1;
-        else
-            rowdata[x].texX = fix16_to_int(fix16_mul(wallX, F16(TEX_WIDTH)));
+            rowdata[x].texX = TEX_WIDTH - rowdata[x].texX - 1;
+
 
         // -------------------
 
@@ -662,7 +659,7 @@ void initTextures(void)
     {
         for(uint8_t x=0; x<TEX_WIDTH; ++x)
         {
-            texture[TEX_WIDTH * y + x] = 1 + x / (TEX_WIDTH / 3);
+            texture[TEX_WIDTH * x + y] = 1 + x / (TEX_WIDTH / 3);
 #if 0
             int xorcolor = (x * 256 / texWidth) ^ (y * 256 / texHeight);
             //int xcolor = x * 256 / texWidth;
