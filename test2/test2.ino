@@ -96,7 +96,7 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
 
     // cache this to make to avoid constant recalculations in the loops below
     for (uint8_t i=0; i<8; ++i)
-        colorbshift[7-i] = ((i < 4) ? (6 - (i*2)) : (14-((i*2)-8)));
+        colorbshift[i] = 14 - 2 * i;// ((i < 4) ? (6 - (i*2)) : (14-((i*2)-8)));
 
 //    uint32_t ptime = 0;
 
