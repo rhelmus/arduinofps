@@ -1,0 +1,9 @@
+j1firmware/basewords.fs
+j1firmware/crossj1.fs
+j1firmware/eforth.fs
+j1firmware/hwdefs.fs
+j1firmware/main.fs
+j1firmware/nuc.fs
+j1firmware/render.fs
+j1firmware/screens.fs
+test5.ino
