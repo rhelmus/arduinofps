@@ -30,6 +30,13 @@ void setup()
     GD.begin();
     initSprite();
     GD.microcode(render_code, sizeof(render_code));
+
+    GD.wr(COMM+0, 2);
+    GD.wr(RAM_SPR + 2048 + 0, 10);
+    GD.wr16(RAM_SPR + 2048 + 1, 256 - (256 / 4));
+    GD.wr(RAM_SPR + 2048 + 4, 10);
+    GD.wr16(RAM_SPR + 2048 + 4 + 1, 256 - (256 / 2));
+
 }
 
 
