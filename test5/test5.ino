@@ -7,7 +7,7 @@ namespace {
 
 enum
 {
-    SCREEN_WIDTH = 160,
+    SCREEN_WIDTH = 320,
     SCREEN_WIDTH_SPR = SCREEN_WIDTH / 16,
     RAM_SPRZOOM = RAM_SPRPAL
 };
@@ -55,7 +55,7 @@ void initSprites(void)
     for (uint16_t i=0; i<1024; ++i)
         GD.wr(RAM_SPR + 1024 + i, GD.rd(RAM_SPR + i));
 
-    GD.wr(COMM+0, SCREEN_WIDTH_SPR);
+    GD.wr(COMM+0, SCREEN_WIDTH_SPR + 10);
 
 #if 0
     GD.wr16(PALETTE16A, RGB(255, 255, 255));
