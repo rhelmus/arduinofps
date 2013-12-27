@@ -56,8 +56,11 @@ void initSprites(void)
         const uint8_t y = 50;
         GD.sprite(i, (i*8), y, i/4, 0b1000 | ((i & 3) << 1));
 
-        for (uint8_t j=0; j<16; ++j)
-            setPixel4bpp(i, j & 15, 7, 2);
+        for (uint8_t x=0; x<16; ++x)
+        {
+            for (uint8_t y=0; y<16; ++y)
+                setPixel4bpp(i, x, y, y & 3);
+        }
 
         GD.wr(RAM_SPRZOOM + (i * 4), y);
         GD.wr16(RAM_SPRZOOM + (i * 4) + 1, 256 - (256 / 5));
@@ -67,7 +70,7 @@ void initSprites(void)
     for (uint16_t i=0; i<1024; ++i)
         GD.wr(RAM_SPR + 1024 + i, GD.rd(RAM_SPR + i));
 
-    GD.wr(COMM+0, SCREEN_WIDTH_SPR+10);
+    GD.wr(COMM+0, 2*SCREEN_WIDTH_SPR-5);
 
 #if 0
     GD.wr16(PALETTE16A, RGB(255, 255, 255));
