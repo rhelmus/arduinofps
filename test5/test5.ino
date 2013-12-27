@@ -39,10 +39,22 @@ void initSprites(void)
     GD.wr16(PALETTE4B + 4, RGB(255, 0, 0));
     GD.wr16(PALETTE4B + 6, RGB(255, 255, 255));
 
-    for (uint8_t i=0; i<(2*SCREEN_WIDTH_SPR); ++i)
+    /*for (uint8_t i=0; i<(2*SCREEN_WIDTH_SPR); ++i)
     {
         const uint8_t y = 10 + ((i / SCREEN_WIDTH_SPR) * 96);
         GD.sprite(i, (i*16) % SCREEN_WIDTH, y, i/4, 0b1000 | ((i & 3) << 1));
+
+        for (uint8_t j=0; j<16; ++j)
+            setPixel4bpp(i, j & 15, 7, 2);
+
+        GD.wr(RAM_SPRZOOM + (i * 4), y);
+        GD.wr16(RAM_SPRZOOM + (i * 4) + 1, 256 - (256 / 5));
+    }*/
+
+    for (uint8_t i=0; i<(2*SCREEN_WIDTH_SPR); ++i)
+    {
+        const uint8_t y = 50;
+        GD.sprite(i, (i*8), y, i/4, 0b1000 | ((i & 3) << 1));
 
         for (uint8_t j=0; j<16; ++j)
             setPixel4bpp(i, j & 15, 7, 2);
@@ -55,7 +67,7 @@ void initSprites(void)
     for (uint16_t i=0; i<1024; ++i)
         GD.wr(RAM_SPR + 1024 + i, GD.rd(RAM_SPR + i));
 
-    GD.wr(COMM+0, SCREEN_WIDTH_SPR + 10);
+    GD.wr(COMM+0, SCREEN_WIDTH_SPR+10);
 
 #if 0
     GD.wr16(PALETTE16A, RGB(255, 255, 255));
