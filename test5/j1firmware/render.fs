@@ -10,8 +10,8 @@ d# 4 constant SPRZOOM_SIZE \ NOTE: +1 byte to make calculating RAM_SPR pos easie
 : >=    1- ;fallthru
 : >     swap < ;
 : @     dupc@ swap 1+ c@ swab or ;
+: !     over swab over 1+ c! c! ;
 : 2drop drop drop ;
-: 2dup< over over < ;
 
 
 : main
@@ -22,29 +22,30 @@ d# 4 constant SPRZOOM_SIZE \ NOTE: +1 byte to make calculating RAM_SPR pos easie
         until
 
         NUM_ZSPRITES c@ SPRZOOM_SIZE * RAM_SPRZOOM + \ end
-
         begin
             YLINE c@ >r
 
             RAM_SPRZOOM \ start
             begin
-                \ dupc@ YLINE c@ 1- < YLINE c@ d# 200 < and if
                 \ dupc@ r@ 1+ < r@ d# 200 < and if
                 dupc@ r@ 1+ < over c@ d# 96 + r@ >= and if
-                    \ dup 1+ @ \ yzoom
-                    \ over c@ \ startY
-                    d# 205
-                    d# 50
+                    \ dup d# 2 + @ \ y counter (FP)
+                    \ \ dup 1+ @ \ yzoom (UNDONE)
+                    \ d# 205 \ yzoom
+                    \ + \ ycounter + yzoom
+                    \ over d# 2 + over swap ! \ write new value
 
-                    \ YLINE c@
-                    r@
+                    \ ((starty+yzoom)+128)/256
+                    \ d# 128 + d# 8 rshift \ new sprite y
 
-                    \ dup d# 1 and dup>r SPR_PAGE c!
-                    1+ swap - * over c@ d# 256 * + d# 128 + d# 8 rshift \ ((yline+1 - starty) * yzoom + (starty * 256) + 128) / 256
-                    \ \ over d# 2048 r> d# 0 = rshift d# 2 - - c! \ RAM_SPRZOOM - (2048 >> (SPR_PAGE==0)) - 2 == RAM_SPR + 2 == sprite y
-                    \ over r> if d# 2046 else d# 1022 then
-                    \ - c!
-                    over d# 2046 - c! \ RAM_SPRZOOM - 2048 + 2 == RAM_SPR + 2 == sprite y
+                    \ \ 1+ swap - * over c@ d# 256 * + d# 128 + d# 8 rshift \ ((yline+1 - starty) * yzoom + (starty * 256) + 128) / 256
+                    \ over d# 2046 - c! \ RAM_SPRZOOM - 2048 + 2 == RAM_SPR + 2 == sprite y
+                    r@ over d# 2046 - c!
+                    noop noop noop noop
+                    noop noop noop noop
+                    noop noop \ noop noop
+                    \ noop noop noop noop
+                    \ noop noop noop noop
                 then
 
                 SPRZOOM_SIZE + 2dup<
@@ -61,7 +62,16 @@ d# 4 constant SPRZOOM_SIZE \ NOTE: +1 byte to make calculating RAM_SPR pos easie
             VBLANK c@
         until
 
-        drop
+        \ Reset sprites (we're now VBLANKING)
+        RAM_SPRZOOM \ begin
+        begin
+            dup c@ \ starty
+            d# 256 * over d# 2 + !
+            d# 4 + 2dup<
+        until
+
+        2drop
+
     again
 ;
 

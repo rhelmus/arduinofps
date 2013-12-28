@@ -63,14 +63,14 @@ void initSprites(void)
         }
 
         GD.wr(RAM_SPRZOOM + (i * 4), y);
-        GD.wr16(RAM_SPRZOOM + (i * 4) + 1, 256 - (256 / 5));
+        GD.wr(RAM_SPRZOOM + (i * 4) + 1, 256 - (256 / 5));
     }
 
     // Duplicate sprite page
     for (uint16_t i=0; i<1024; ++i)
         GD.wr(RAM_SPR + 1024 + i, GD.rd(RAM_SPR + i));
 
-    GD.wr(COMM+0, 2*SCREEN_WIDTH_SPR-5);
+    GD.wr(COMM+0, 2*SCREEN_WIDTH_SPR);
 
 #if 0
     GD.wr16(PALETTE16A, RGB(255, 255, 255));
