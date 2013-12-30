@@ -8,11 +8,8 @@ namespace {
 void initSprites(void)
 {
     GD.copy(PALETTE16A, (const uint8_t *)guardPal, sizeof(guardPal));
-    /*for (int i=0; i<16; ++i)
-        GD.wr16(PALETTE16A + (i*2), RGB(255, 0, 0));*/
 
     // Copy 32x16 pixel (ie 4bpp sprites) blocks to sprite ram
-#if 1
     uint8_t spriteblock = 0;
     for (uint8_t starty=0; starty<64; starty+=16)
     {
@@ -23,8 +20,6 @@ void initSprites(void)
             ++spriteblock;
         }
     }
-#endif
-//    GD.fill(RAM_SPRIMG, 0b01100110, 16 * 1024);
 
     // Layout sprites
     for (uint8_t i=0; i<16; i+=2)
