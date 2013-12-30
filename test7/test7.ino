@@ -25,8 +25,11 @@ enum
 {
     SCREEN_WIDTH = 320,
     SCREEN_WIDTH_SPR = SCREEN_WIDTH / 16, // must be multiple of 2
-    SCREEN_HEIGHT = 96,
-    SCREEN_HEIGHT_SPR = 4, // UNDONE
+
+    // Sprites are vertically stretched. For raycasting we consider the unstretched height.
+    SCREEN_HEIGHT = 192,
+    SCREEN_HEIGHT_RAY = 96,
+    SCREEN_HEIGHT_SPR = SCREEN_HEIGHT_RAY / 16,
 
     SCREEN_STARTX = (400 - SCREEN_WIDTH) / 2,
     SCREEN_STARTY = (300 - SCREEN_HEIGHT) / 2,
@@ -111,13 +114,25 @@ inline void SPIFIFOWrite16(uint32_t b, uint32_t cont)
 void initSprites(void)
 {
     // Layout sprites, from left to right, top to bottom
+
+    const uint8_t yspacing = (((SCREEN_HEIGHT / 16) / SCREEN_HEIGHT_SPR) - 1);
     for (uint8_t i=0; i<(SCREEN_WIDTH_SPR * SCREEN_HEIGHT_SPR); i+=2)
     {
         const uint8_t spr = i / 2;
-        const uint16_t y = SCREEN_STARTY + (i/SCREEN_WIDTH_SPR) * 16;
+        const uint16_t y = SCREEN_STARTY + (i/SCREEN_WIDTH_SPR) * 16 +
+                           (i/SCREEN_WIDTH_SPR) * (yspacing * 16);
         GD.sprite(i, SCREEN_STARTX + (i % SCREEN_WIDTH_SPR) * 16, y, spr, 0b0100); // index low byte
         GD.sprite(i+1, SCREEN_STARTX + ((i+1) % SCREEN_WIDTH_SPR) * 16, y, spr, 0b0110); // index high byte
     }
+
+    // ref sprites for debug
+    GD.sprite(200, SCREEN_STARTX - 16 - 1, SCREEN_STARTY + 0, 63, 0b0100);
+    GD.sprite(201, SCREEN_STARTX - 16 - 1, SCREEN_STARTY + 32, 63, 0b0100);
+    GD.sprite(202, SCREEN_STARTX - 16 - 1, SCREEN_STARTY + 64, 63, 0b0100);
+    GD.sprite(203, SCREEN_STARTX - 16 - 1, SCREEN_STARTY + 96, 63, 0b0100);
+    GD.sprite(204, SCREEN_STARTX - 16 - 1, SCREEN_STARTY + 128, 63, 0b0100);
+    GD.sprite(205, SCREEN_STARTX - 16 - 1, SCREEN_STARTY + 160, 63, 0b0100);
+    GD.fill(RAM_SPRIMG + (63 * 256), 0b0001, 256);
 }
 
 void initTextures(void)
@@ -186,7 +201,7 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
             const uint_fast8_t starty = (rowdata[x].top > sprrowy) ? (rowdata[x].top - sprrowy) : 0;
             const uint_fast8_t endy = (rowdata[x].bottom < nextsprowy) ? (rowdata[x].bottom - sprrowy) : 15;
 
-            const uint_fast16_t d = (sprrowy + starty) - (SCREEN_HEIGHT / 2) + (rowdata[x].lineHeight / 2);
+            const uint_fast16_t d = (sprrowy + starty) - (SCREEN_HEIGHT_RAY / 2) + (rowdata[x].lineHeight / 2);
             uint_fast16_t texY = d * rowdata[x].texZ;
 
             for (uint_fast8_t spry=starty; spry<=endy; ++spry)
@@ -210,90 +225,6 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
     SPIFIFO.read();
     SPIFIFO.read();
     SPIFIFO.read();
-
-#if 0
-    uint16_t colorbshift[8];
-
-    // cache this to make to avoid constant recalculations in the loops below
-    for (uint8_t i=0; i<8; ++i)
-        colorbshift[i] = 14 - 2 * i;// ((i < 4) ? (6 - (i*2)) : (14-((i*2)-8)));
-
-    uint16_t curch[8];
-    memset(curch, 0, sizeof(curch));
-
-    SPIFIFO.write16(FRAMEBUFFER | 0x8000, SPI_CONTINUE);
-    SPIFIFO.read();
-
-    for (uint_fast8_t chrow=0; chrow<SCREEN_HEIGHT_CH; ++chrow)
-    {
-        const uint_fast16_t chrowy = chrow * 8, nextchrowy = chrowy + 8;
-
-        for (uint_fast16_t x=0; x<SCREEN_WIDTH; ++x)
-        {
-            const uint_fast8_t chx = x & 7; // chx mod 8
-
-            if (x && !chx)
-            {
-                // First write?
-                if (!chrow && (x == 8))
-                {
-                    // Fill FIFO
-                    SPIFIFO.write16(curch[0], SPI_CONTINUE);
-                    SPIFIFO.write16(curch[1], SPI_CONTINUE);
-                    SPIFIFO.write16(curch[2], SPI_CONTINUE);
-
-                    for (uint_fast8_t i=3; i<8; ++i)
-                    {
-                        SPIFIFO.write16(curch[i], SPI_CONTINUE);
-                        SPIFIFO.read();
-                    }
-                }
-                else
-                {
-                    for (uint_fast8_t i=0; i<8; ++i)
-                    {
-                        SPIFIFO.write16(curch[i], SPI_CONTINUE);
-                        SPIFIFO.read();
-                    }
-                }
-                memset(curch, 0, sizeof(curch));
-            }
-
-            if ((nextchrowy <= rowdata[x].top) || (chrowy > rowdata[x].bottom))
-                continue;
-
-            const uint_fast8_t starty = (rowdata[x].top > chrowy) ? (rowdata[x].top - chrowy) : 0;
-            const uint_fast8_t endy = (rowdata[x].bottom < nextchrowy) ? (rowdata[x].bottom - chrowy) : 7;
-
-            const uint_fast16_t d = (chrowy + starty) - (SCREEN_HEIGHT / 2) + (rowdata[x].lineHeight / 2);
-            uint_fast16_t texY = ((uint32_t)d * (uint32_t)rowdata[x].texZ);
-
-            for (uint_fast8_t chy=starty; chy<=endy; ++chy)
-            {
-                curch[chy] |= ((uint16_t)texture[TEX_HEIGHT * rowdata[x].texX + (texY/256)] << colorbshift[chx]);
-
-                texY += rowdata[x].texZ;
-
-            }
-        }
-
-        for (uint_fast8_t i=0; i<8; ++i)
-        {
-            SPIFIFO.write16(curch[i], SPI_CONTINUE);
-            SPIFIFO.read();
-        }
-        memset(curch, 0, sizeof(curch));
-    }
-
-    // UNDONE
-    SPIFIFO.write(0);
-    SPIFIFO.read();
-
-    // Empty FIFO
-    SPIFIFO.read();
-    SPIFIFO.read();
-    SPIFIFO.read();
-#endif
 }
 
 void raycast(void) __attribute__((optimize("-O3")));
@@ -381,16 +312,16 @@ void raycast()
             perpWallDist = fix16_abs(fix16_div(fix16_add(fix16_sub(fix16_from_int(mapY), posY), fix16_div(fix16_from_int(1 - stepY), F16(2))), rayDirY));
 
         //Calculate height of line to draw on screen
-        const uint16_t lineHeight = fix16_to_int(fix16_div(F16(SCREEN_HEIGHT), perpWallDist));
+        const uint16_t lineHeight = fix16_to_int(fix16_div(F16(SCREEN_HEIGHT_RAY), perpWallDist));
 
         //calculate lowest and highest pixel to fill in current stripe
-        int_fast16_t drawStart = -lineHeight / 2 + SCREEN_HEIGHT / 2;
+        int_fast16_t drawStart = -lineHeight / 2 + SCREEN_HEIGHT_RAY / 2;
         if (drawStart < 0)
             drawStart = 0;
 
-        uint_fast16_t drawEnd = lineHeight / 2 + SCREEN_HEIGHT / 2;
-        if (drawEnd >= SCREEN_HEIGHT)
-            drawEnd = SCREEN_HEIGHT - 1;
+        uint_fast16_t drawEnd = lineHeight / 2 + SCREEN_HEIGHT_RAY / 2;
+        if (drawEnd >= SCREEN_HEIGHT_RAY)
+            drawEnd = SCREEN_HEIGHT_RAY - 1;
 
         // -----------------
 
@@ -442,32 +373,7 @@ void setup()
     initSprites();
     initTextures();
 
-    GD.fill(RAM_SPRIMG, 0b00010001, (SCREEN_WIDTH_SPR * SCREEN_HEIGHT_SPR) / 2 * 256);
-
-#if 0
-    GD.wr16(BG_COLOR, RGB(0, 0, 0));
-    GD.fill(RAM_PIC, 255, 4 * 1024);
-    
-    // Setup framebuffer
-    for (uint8_t row=0; row<SCREEN_HEIGHT_CH; ++row)
-    {
-        for (uint8_t col=0; col<SCREEN_WIDTH_CH; ++col)
-            GD.wr(RAM_PIC + (row + 6) * 64 + col, col + ((row % 2) == 0) * SCREEN_WIDTH_CH);
-    }
-
-    // All of the same palette for now
-    for (uint16_t i=0; i<(SCREEN_WIDTH_CH * 2); ++i)
-    {
-        GD.wr16(RAM_PAL + (i * 8), TRANSPARENT);
-        GD.wr16(RAM_PAL + (i * 8) + 2, getRGBColor(0));
-        GD.wr16(RAM_PAL + (i * 8) + 4, getRGBColor(1));
-        GD.wr16(RAM_PAL + (i * 8) + 6, RGB(0, 0, 255));
-    }
-
-    initTextures();
-    
     GD.microcode(render_code, sizeof(render_code));
-#endif
 }
 
 
