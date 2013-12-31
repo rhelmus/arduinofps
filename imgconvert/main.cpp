@@ -24,6 +24,21 @@ void dumpSprite(const QImage &img, QTextStream &tstr, const QString &varbase)
 
     for (int y=0; y<64; ++y)
     {
+        // Row data stored as nibbles, low byte == even px, high byte == odd px
+        for (int x=0; x<64; x+=2)
+        {
+            tstr << (img.pixelIndex(x, y) | (img.pixelIndex(x+1, y) << 4));
+            if (((x+2) != 64) || ((y+1) != 64))
+                tstr << ", ";
+        }
+
+        tstr << "\n";
+    }
+
+
+#if 0
+    for (int y=0; y<64; ++y)
+    {
         // width == 64 pixels --> 2 blocks which are compressed to nibbles
 
         // First block (0-15 and 16-31)
@@ -44,6 +59,7 @@ void dumpSprite(const QImage &img, QTextStream &tstr, const QString &varbase)
 
         tstr << "\n";
     }
+#endif
 
 #if 0
     for (int y=starty; y<(starty+16); ++y)
@@ -75,6 +91,13 @@ int main(int argc, char *argv[])
         qFatal("Not enough arguments!\nUsage: <infile> <outfile> <basename>");
 
     QImage img(args.at(1));
+
+    QTransform tr;
+    tr.translate(32, 32);
+    tr.rotate(90);
+    tr.translate(-32, -32);
+    img = img.transformed(tr); // Save it rotated, as this speeds up displaying
+
 
     qDebug() << "Image color format:" << img.format();
 
@@ -126,6 +149,7 @@ int main(int argc, char *argv[])
     }
 
     tstr << "};\n\n";
+
 
     // Texture data
     dumpSprite(img, tstr, varbase);

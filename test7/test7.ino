@@ -6,6 +6,7 @@
 
 #include "fixmath.h"
 #include "render.h"
+#include "walltex.h"
 
 #define FRAMEBUFFER RAM_SPRIMG
 
@@ -115,7 +116,7 @@ void initSprites(void)
 {
     // Layout sprites, from left to right, top to bottom
 
-    const uint8_t yspacing = (((SCREEN_HEIGHT / 16) / SCREEN_HEIGHT_SPR) - 1);
+    const uint8_t yspacing = 0;//(((SCREEN_HEIGHT / 16) / SCREEN_HEIGHT_SPR) - 1);
     for (uint8_t i=0; i<(SCREEN_WIDTH_SPR * SCREEN_HEIGHT_SPR); i+=2)
     {
         const uint8_t spr = i / 2;
@@ -137,7 +138,11 @@ void initSprites(void)
 
 void initTextures(void)
 {
+#if 0
     // Initialize palette
+    GD.copy(PALETTE16A, (const uint8_t *)wallPal, sizeof(wallPal));
+
+#else
     // UNDONE
     GD.wr16(PALETTE16A, TRANSPARENT);
     GD.wr16(PALETTE16A + 2, RGB(255, 0, 0));
@@ -147,11 +152,13 @@ void initTextures(void)
     //generate some textures
     for(uint8_t y=0; y<TEX_HEIGHT; ++y)
     {
-        for(uint8_t x=0; x<TEX_WIDTH; ++x)
+        for(uint8_t x=0; x<(TEX_WIDTH/2); ++x)
         {
-            texture[TEX_WIDTH * x + y] = 1 + x / (TEX_WIDTH / 3);
+            texture[(TEX_HEIGHT * y) / 2 + x] = 1 + y / (TEX_HEIGHT / 3);
+            texture[(TEX_HEIGHT * y) / 2 + x] |= (1 + y / (TEX_HEIGHT / 3)) << 4;
         }
     }
+#endif
 }
 
 void drawScreen(struct SRowData * __restrict__ rowdata) __attribute__((optimize("-O3")));
@@ -206,8 +213,18 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
 
             for (uint_fast8_t spry=starty; spry<=endy; ++spry)
             {
+#if 0
                 const uint_fast8_t c = (texture[TEX_HEIGHT * rowdata[x].texX + (texY/256)] & 0b1111) << (4 * highbyte);
+#endif
+                // UNDONE: Progmem
+                // Texture is stored as a 90 degree rotated 64x64 image,
+                // where each row is stored as 32x2 nibbles (even px=low byte, odd=high byte)
+//                const uint_fast16_t txoffset = (TEX_HEIGHT * rowdata[x].texX) / 2 + (texY/256) / 2;
+                const uint_fast16_t txoffset = ((TEX_HEIGHT * (texY / 256)) + (rowdata[x].texX)) / 2;
+//                const uint_fast8_t c = (wallTex[txoffset] >> (4 * (x & 1))) << (4 * highbyte);
+                const uint_fast8_t c = (texture[txoffset] >> (4 * (rowdata[x].texX & 1))) << (4 * highbyte);
                 cursprblock[spry * 16 + sprx] |= c;
+//                cursprblock[spry * 16 + sprx] |= (0b11 << (4 * highbyte));
                 texY += rowdata[x].texZ;
             }
         }
@@ -373,7 +390,7 @@ void setup()
     initSprites();
     initTextures();
 
-    GD.microcode(render_code, sizeof(render_code));
+//    GD.microcode(render_code, sizeof(render_code));
 }
 
 
@@ -384,7 +401,7 @@ void loop()
     
     if (uptime < curtime)
     {
-        const fix16_t rotSpeed = F16(0.3 * 3.0 * 0.1);
+        const fix16_t rotSpeed = F16(0.3 * 3.0 * 0.05);
 
         const fix16_t oldDirX = dirX;
         dirX = fix16_sub(fix16_mul(dirX, fix16_cos(-rotSpeed)), fix16_mul(dirY, fix16_sin(-rotSpeed)));
