@@ -659,7 +659,7 @@ void initTextures(void)
     {
         for(uint8_t x=0; x<TEX_WIDTH; ++x)
         {
-            texture[TEX_WIDTH * x + y] = 1 + x / (TEX_WIDTH / 3);
+            texture[TEX_WIDTH * y + x] = 1 + x / (TEX_WIDTH / 3);
 #if 0
             int xorcolor = (x * 256 / texWidth) ^ (y * 256 / texHeight);
             //int xcolor = x * 256 / texWidth;

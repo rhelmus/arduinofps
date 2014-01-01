@@ -77,7 +77,6 @@ fix16_t posX = F16(22), posY = F16(12);  //x and y start position
 fix16_t dirX = F16(-1), dirY = 0; //initial direction vector
 fix16_t planeX = 0, planeY = F16(0.66); //the 2d raycaster version of camera plane
 
-
 uint8_t texture[TEX_WIDTH * TEX_HEIGHT];
 
 // --------
@@ -116,7 +115,7 @@ void initSprites(void)
 {
     // Layout sprites, from left to right, top to bottom
 
-    const uint8_t yspacing = 0;//(((SCREEN_HEIGHT / 16) / SCREEN_HEIGHT_SPR) - 1);
+    const uint8_t yspacing = (((SCREEN_HEIGHT / 16) / SCREEN_HEIGHT_SPR) - 1);
     for (uint8_t i=0; i<(SCREEN_WIDTH_SPR * SCREEN_HEIGHT_SPR); i+=2)
     {
         const uint8_t spr = i / 2;
@@ -138,25 +137,36 @@ void initSprites(void)
 
 void initTextures(void)
 {
-#if 0
+#if 1
     // Initialize palette
     GD.copy(PALETTE16A, (const uint8_t *)wallPal, sizeof(wallPal));
 
+#elif 1
+    GD.wr16(PALETTE16A, TRANSPARENT);
+    GD.wr16(PALETTE16A + 2, RGB(255, 0, 0));
+    GD.wr16(PALETTE16A + 4, RGB(0, 255, 0));
+    GD.wr16(PALETTE16A + 6, RGB(0, 0, 255));
+    GD.wr16(PALETTE16A + 8, RGB(255, 255, 255));
+
+    //generate some textures
+    for(uint8_t y=0; y<TEX_HEIGHT; ++y)
+    {
+        for(uint8_t x=0; x<TEX_WIDTH; ++x)
+        {
+            texture[(TEX_WIDTH * y + x) / 2] = 1 + x / (TEX_WIDTH / 3);
+            texture[(TEX_WIDTH * y + x) / 2] |= ((1 + x / (TEX_WIDTH / 3)) << 4);
+        }
+    }
 #else
-    // UNDONE
     GD.wr16(PALETTE16A, TRANSPARENT);
     GD.wr16(PALETTE16A + 2, RGB(255, 0, 0));
     GD.wr16(PALETTE16A + 4, RGB(0, 255, 0));
     GD.wr16(PALETTE16A + 6, RGB(0, 0, 255));
 
-    //generate some textures
     for(uint8_t y=0; y<TEX_HEIGHT; ++y)
     {
-        for(uint8_t x=0; x<(TEX_WIDTH/2); ++x)
-        {
-            texture[(TEX_HEIGHT * y) / 2 + x] = 1 + y / (TEX_HEIGHT / 3);
-            texture[(TEX_HEIGHT * y) / 2 + x] |= (1 + y / (TEX_HEIGHT / 3)) << 4;
-        }
+        for(uint8_t x=0; x<TEX_WIDTH; ++x)
+            texture[TEX_WIDTH * y + x] = 1 + y / (TEX_WIDTH / 3);
     }
 #endif
 }
@@ -180,23 +190,21 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
 
             if (x && ((x & 31) == 0))
             {
-                // NOTE: write16 is used to speed things up a little bit (hence we need casting)
-
                 // First write?
                 if (!sprrow && (x == 32))
                 {
                     // Fill FIFO
-                    SPIFIFO.write16(((uint16_t *)cursprblock)[0], SPI_CONTINUE);
-                    SPIFIFO.write16(((uint16_t *)cursprblock)[1], SPI_CONTINUE);
-                    SPIFIFO.write16(((uint16_t *)cursprblock)[2], SPI_CONTINUE);
+                    SPIFIFO.write(cursprblock[0], SPI_CONTINUE);
+                    SPIFIFO.write(cursprblock[1], SPI_CONTINUE);
+                    SPIFIFO.write(cursprblock[2], SPI_CONTINUE);
 
-                    for (uint_fast8_t i=3; i<128; ++i)
-                        SPIFIFOWrite16(((uint16_t *)cursprblock)[i], SPI_CONTINUE);
+                    for (uint_fast16_t i=3; i<256; ++i)
+                        SPIFIFOWrite(cursprblock[i], SPI_CONTINUE);
                 }
                 else
                 {
-                    for (uint_fast8_t i=0; i<128; ++i)
-                        SPIFIFOWrite16(((uint16_t *)cursprblock)[i], SPI_CONTINUE);
+                    for (uint_fast16_t i=0; i<256; ++i)
+                        SPIFIFOWrite(cursprblock[i], SPI_CONTINUE);
                 }
 
                 memset(cursprblock, 0, sizeof(cursprblock));
@@ -206,32 +214,41 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
                 continue;
 
             const uint_fast8_t starty = (rowdata[x].top > sprrowy) ? (rowdata[x].top - sprrowy) : 0;
-            const uint_fast8_t endy = (rowdata[x].bottom < nextsprowy) ? (rowdata[x].bottom - sprrowy) : 15;
+            const uint_fast8_t endy = (rowdata[x].bottom < nextsprowy) ? (rowdata[x].bottom - sprrowy) : 16;
 
-            const uint_fast16_t d = (sprrowy + starty) - (SCREEN_HEIGHT_RAY / 2) + (rowdata[x].lineHeight / 2);
-            uint_fast16_t texY = d * rowdata[x].texZ;
+            const uint_fast16_t d = (sprrowy + starty) * 256 - SCREEN_HEIGHT_RAY * 128 + rowdata[x].lineHeight * 128;
+            uint_fast16_t texY = d * rowdata[x].texZ / 256;
 
-            for (uint_fast8_t spry=starty; spry<=endy; ++spry)
+            for (uint_fast8_t spry=starty; spry<endy; ++spry)
             {
 #if 0
                 const uint_fast8_t c = (texture[TEX_HEIGHT * rowdata[x].texX + (texY/256)] & 0b1111) << (4 * highbyte);
-#endif
+                texY += rowdata[x].texZ;
+#elif 0
+                const uint_fast16_t d = (sprrowy + spry) * 256 - SCREEN_HEIGHT_RAY * 128 + rowdata[x].lineHeight * 128;
+                const uint_fast16_t texY = ((d * TEX_HEIGHT) / rowdata[x].lineHeight) / 256;
+                /*const float d = (float)(sprrowy + spry) - (float)SCREEN_HEIGHT_RAY / 2.0 + (float)rowdata[x].lineHeight / 2.0;
+                const uint_fast8_t texY = (uint_fast8_t)(((d * (float)TEX_HEIGHT) / (float)rowdata[x].lineHeight));*/
+                const uint_fast8_t c = (texture[TEX_WIDTH * texY + rowdata[x].texX] & 0b1111) << (4 * highbyte);
+#else
                 // UNDONE: Progmem
                 // Texture is stored as a 90 degree rotated 64x64 image,
                 // where each row is stored as 32x2 nibbles (even px=low byte, odd=high byte)
-//                const uint_fast16_t txoffset = (TEX_HEIGHT * rowdata[x].texX) / 2 + (texY/256) / 2;
-                const uint_fast16_t txoffset = ((TEX_HEIGHT * (texY / 256)) + (rowdata[x].texX)) / 2;
-//                const uint_fast8_t c = (wallTex[txoffset] >> (4 * (x & 1))) << (4 * highbyte);
-                const uint_fast8_t c = (texture[txoffset] >> (4 * (rowdata[x].texX & 1))) << (4 * highbyte);
-                cursprblock[spry * 16 + sprx] |= c;
-//                cursprblock[spry * 16 + sprx] |= (0b11 << (4 * highbyte));
+                const uint_fast16_t txoffset = (TEX_HEIGHT * rowdata[x].texX) / 2 + (texY/256) / 2;
+//                const uint_fast16_t txoffset = ((TEX_HEIGHT * (texY / 256)) + rowdata[x].texX) / 2;
+                const uint_fast8_t c = ((wallTex[txoffset] >> (4 * (x & rowdata[x].texX & 1))) & 0b1111) << (4 * highbyte);
+//                const uint_fast8_t c = ((texture[txoffset] >> (4 * (rowdata[x].texX & 1))) & 0b1111) << (4 * highbyte);
                 texY += rowdata[x].texZ;
+
+#endif
+//                cursprblock[spry * 16 + sprx] |= (0b11 << (4 * highbyte));
+                cursprblock[spry * 16 + sprx] |= c;
             }
         }
 
         // Write out last row data
-        for (uint_fast8_t i=0; i<128; ++i)
-            SPIFIFOWrite16(((uint16_t *)cursprblock)[i], SPI_CONTINUE);
+        for (uint_fast16_t i=0; i<256; ++i)
+            SPIFIFOWrite(cursprblock[i], SPI_CONTINUE);
         memset(cursprblock, 0, sizeof(cursprblock));
     }
 
@@ -245,6 +262,7 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
 }
 
 void raycast(void) __attribute__((optimize("-O3")));
+
 void raycast()
 {
     static SRowData rowdata[SCREEN_WIDTH];
@@ -377,7 +395,6 @@ void raycast()
     Serial.print("dtime: "); Serial.println(millis() - dtime, DEC);
 }
 
-
 }
 
 
@@ -390,29 +407,34 @@ void setup()
     initSprites();
     initTextures();
 
-//    GD.microcode(render_code, sizeof(render_code));
+    GD.microcode(render_code, sizeof(render_code));
 }
 
 
 void loop()
 {
     static uint32_t uptime = 0;
-    const uint32_t curtime = millis();
+    uint32_t curtime = millis();
     
     if (uptime < curtime)
     {
-        const fix16_t rotSpeed = F16(0.3 * 3.0 * 0.05);
+        if (Serial.available())
+        {
+            while (Serial.available())
+                Serial.read();
 
-        const fix16_t oldDirX = dirX;
-        dirX = fix16_sub(fix16_mul(dirX, fix16_cos(-rotSpeed)), fix16_mul(dirY, fix16_sin(-rotSpeed)));
-        dirY = fix16_add(fix16_mul(oldDirX, fix16_sin(-rotSpeed)), fix16_mul(dirY, fix16_cos(-rotSpeed)));
+            const fix16_t rotSpeed = F16(0.3 * 3.0 * 0.05);
 
-        const fix16_t oldPlaneX = planeX;
-        planeX = fix16_sub(fix16_mul(planeX, fix16_cos(-rotSpeed)), fix16_mul(planeY, fix16_sin(-rotSpeed)));
-        planeY = fix16_add(fix16_mul(oldPlaneX, fix16_sin(-rotSpeed)), fix16_mul(planeY, fix16_cos(-rotSpeed)));
+            const fix16_t oldDirX = dirX;
+            dirX = fix16_sub(fix16_mul(dirX, fix16_cos(-rotSpeed)), fix16_mul(dirY, fix16_sin(-rotSpeed)));
+            dirY = fix16_add(fix16_mul(oldDirX, fix16_sin(-rotSpeed)), fix16_mul(dirY, fix16_cos(-rotSpeed)));
 
-        // ---------
-        
+            const fix16_t oldPlaneX = planeX;
+            planeX = fix16_sub(fix16_mul(planeX, fix16_cos(-rotSpeed)), fix16_mul(planeY, fix16_sin(-rotSpeed)));
+            planeY = fix16_add(fix16_mul(oldPlaneX, fix16_sin(-rotSpeed)), fix16_mul(planeY, fix16_cos(-rotSpeed)));
+        }
+
+        uint32_t curtime = millis();
         raycast();
         Serial.print("frame: "); Serial.println(millis() - curtime);
         uptime = curtime + 150;
