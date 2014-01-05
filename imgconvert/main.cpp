@@ -94,10 +94,9 @@ int main(int argc, char *argv[])
 
     QTransform tr;
     tr.translate(32, 32);
-    tr.rotate(90);
+    tr.rotate(270);
     tr.translate(-32, -32);
     img = img.transformed(tr); // Save it rotated, as this speeds up displaying
-
 
     qDebug() << "Image color format:" << img.format();
 

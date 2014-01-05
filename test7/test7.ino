@@ -5,6 +5,7 @@
 #include <GDT3.h>
 
 #include "fixmath.h"
+#include "guardtex.h"
 #include "render.h"
 #include "walltex.h"
 
@@ -39,12 +40,15 @@ enum
     TEX_HEIGHT = 64,
 
     MAP_WIDTH = 24,
-    MAP_HEIGHT = 24
+    MAP_HEIGHT = 24,
+
+    NUM_SPRITES = 1
 };
 
 // --------
 // UNDONE: No globals
 
+/*
 const uint8_t worldMap[MAP_HEIGHT][MAP_WIDTH]=
 {
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
@@ -71,13 +75,57 @@ const uint8_t worldMap[MAP_HEIGHT][MAP_WIDTH]=
     {1,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
     {1,4,4,4,4,4,4,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}
+};*/
+
+const uint8_t worldMap[MAP_HEIGHT][MAP_WIDTH]=
+{
+    {8,8,8,8,8,8,8,8,8,8,8,4,4,6,4,4,6,4,6,4,4,4,6,4},
+    {8,0,0,0,0,0,0,0,0,0,8,4,0,0,0,0,0,0,0,0,0,0,0,4},
+    {8,0,3,3,0,0,0,0,0,8,8,4,0,0,0,0,0,0,0,0,0,0,0,6},
+    {8,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6},
+    {8,0,3,3,0,0,0,0,0,8,8,4,0,0,0,0,0,0,0,0,0,0,0,4},
+    {8,0,0,0,0,0,0,0,0,0,8,4,0,0,0,0,0,6,6,6,0,6,4,6},
+    {8,8,8,8,0,8,8,8,8,8,8,4,4,4,4,4,4,6,0,0,0,0,0,6},
+    {7,7,7,7,0,7,7,7,7,0,8,0,8,0,8,0,8,4,0,4,0,6,0,6},
+    {7,7,0,0,0,0,0,0,7,8,0,8,0,8,0,8,8,6,0,0,0,0,0,6},
+    {7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8,6,0,0,0,0,0,4},
+    {7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8,6,0,6,0,6,0,6},
+    {7,7,0,0,0,0,0,0,7,8,0,8,0,8,0,8,8,6,4,6,0,6,6,6},
+    {7,7,7,7,0,7,7,7,7,8,8,4,0,6,8,4,8,3,3,3,0,3,3,3},
+    {2,2,2,2,0,2,2,2,2,4,6,4,0,0,6,0,6,3,0,0,0,0,0,3},
+    {2,2,0,0,0,0,0,2,2,4,0,0,0,0,0,0,4,3,0,0,0,0,0,3},
+    {2,0,0,0,0,0,0,0,2,4,0,0,0,0,0,0,4,3,0,0,0,0,0,3},
+    {1,0,0,0,0,0,0,0,1,4,4,4,4,4,6,0,6,3,3,0,0,0,3,3},
+    {2,0,0,0,0,0,0,0,2,2,2,1,2,2,2,6,6,0,0,5,0,5,0,5},
+    {2,2,0,0,0,0,0,2,2,2,0,0,0,2,2,0,5,0,5,0,0,0,5,5},
+    {2,0,0,0,0,0,0,0,2,0,0,0,0,0,2,5,0,5,0,5,0,5,0,5},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,5},
+    {2,0,0,0,0,0,0,0,2,0,0,0,0,0,2,5,0,5,0,5,0,5,0,5},
+    {2,2,0,0,0,0,0,2,2,2,0,0,0,2,2,0,5,0,5,0,0,0,5,5},
+    {2,2,2,2,1,2,2,2,2,2,2,1,2,2,2,5,5,5,5,5,5,5,5,5}
 };
 
-fix16_t posX = F16(22), posY = F16(12);  //x and y start position
+fix16_t posX = F16(22), posY = F16(11.5);  //x and y start position
 fix16_t dirX = F16(-1), dirY = 0; //initial direction vector
 fix16_t planeX = 0, planeY = F16(0.66); //the 2d raycaster version of camera plane
 
-uint8_t texture[TEX_WIDTH * TEX_HEIGHT];
+//uint8_t texture[TEX_WIDTH * TEX_HEIGHT];
+
+struct Sprite
+{
+    float x, y; // UNDONE: other type
+    uint8_t tex;
+};
+
+const Sprite sprites[NUM_SPRITES] =
+{
+    { 20.5, 11.5, 0 },
+    //{ 18.5, 4.5, 0 }
+};
+
+float ZBuffer[SCREEN_WIDTH];
+uint8_t spriteOrder[NUM_SPRITES];
+float spriteDistance[NUM_SPRITES];
 
 // --------
 
@@ -111,6 +159,37 @@ inline void SPIFIFOWrite16(uint32_t b, uint32_t cont)
     SPIFIFO.read();
 }
 
+void combSort(uint8_t *order, float *dist, uint8_t amount) __attribute__((optimize("-O3")));
+void combSort(uint8_t *order, float *dist, uint8_t amount)
+{
+#define SWAP_FLOAT(t, i, j) { t = i; i = j; j = t; }
+
+    uint_fast8_t gap = amount;
+    bool swapped = false;
+    float t;
+
+    while((gap > 1) || swapped)
+    {
+        //shrink factor 1.3
+        gap = (gap * 10) / 13;
+        if ((gap == 9) || (gap == 10))
+            gap = 11;
+        if (gap < 1)
+            gap = 1;
+        swapped = false;
+        for (uint_fast8_t i=0; i<(amount - gap); ++i)
+        {
+            const uint_fast8_t j = i + gap;
+            if (dist[i] < dist[j])
+            {
+                SWAP_FLOAT(t, dist[i], dist[j]);
+                SWAP_FLOAT(t, order[i], order[j]);
+                swapped = true;
+            }
+        }
+    }
+}
+
 void initSprites(void)
 {
     // Layout sprites, from left to right, top to bottom
@@ -139,7 +218,8 @@ void initTextures(void)
 {
 #if 1
     // Initialize palette
-    GD.copy(PALETTE16A, (const uint8_t *)wallPal, sizeof(wallPal));
+//    GD.copy(PALETTE16A, (const uint8_t *)wallPal, sizeof(wallPal));
+    GD.copy(PALETTE16A, (const uint8_t *)guardPal, sizeof(guardPal));
 
 #elif 1
     GD.wr16(PALETTE16A, TRANSPARENT);
@@ -156,17 +236,6 @@ void initTextures(void)
             texture[(TEX_WIDTH * y + x) / 2] = 1 + x / (TEX_WIDTH / 3);
             texture[(TEX_WIDTH * y + x) / 2] |= ((1 + x / (TEX_WIDTH / 3)) << 4);
         }
-    }
-#else
-    GD.wr16(PALETTE16A, TRANSPARENT);
-    GD.wr16(PALETTE16A + 2, RGB(255, 0, 0));
-    GD.wr16(PALETTE16A + 4, RGB(0, 255, 0));
-    GD.wr16(PALETTE16A + 6, RGB(0, 0, 255));
-
-    for(uint8_t y=0; y<TEX_HEIGHT; ++y)
-    {
-        for(uint8_t x=0; x<TEX_WIDTH; ++x)
-            texture[TEX_WIDTH * y + x] = 1 + y / (TEX_WIDTH / 3);
     }
 #endif
 }
@@ -221,27 +290,13 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
 
             for (uint_fast8_t spry=starty; spry<endy; ++spry)
             {
-#if 0
-                const uint_fast8_t c = (texture[TEX_HEIGHT * rowdata[x].texX + (texY/256)] & 0b1111) << (4 * highbyte);
-                texY += rowdata[x].texZ;
-#elif 0
-                const uint_fast16_t d = (sprrowy + spry) * 256 - SCREEN_HEIGHT_RAY * 128 + rowdata[x].lineHeight * 128;
-                const uint_fast16_t texY = ((d * TEX_HEIGHT) / rowdata[x].lineHeight) / 256;
-                /*const float d = (float)(sprrowy + spry) - (float)SCREEN_HEIGHT_RAY / 2.0 + (float)rowdata[x].lineHeight / 2.0;
-                const uint_fast8_t texY = (uint_fast8_t)(((d * (float)TEX_HEIGHT) / (float)rowdata[x].lineHeight));*/
-                const uint_fast8_t c = (texture[TEX_WIDTH * texY + rowdata[x].texX] & 0b1111) << (4 * highbyte);
-#else
                 // UNDONE: Progmem
                 // Texture is stored as a 90 degree rotated 64x64 image,
                 // where each row is stored as 32x2 nibbles (even px=low byte, odd=high byte)
                 const uint_fast16_t txoffset = (TEX_HEIGHT * rowdata[x].texX) / 2 + (texY/256) / 2;
-//                const uint_fast16_t txoffset = ((TEX_HEIGHT * (texY / 256)) + rowdata[x].texX) / 2;
-                const uint_fast8_t c = ((wallTex[txoffset] >> (4 * (x & rowdata[x].texX & 1))) & 0b1111) << (4 * highbyte);
-//                const uint_fast8_t c = ((texture[txoffset] >> (4 * (rowdata[x].texX & 1))) & 0b1111) << (4 * highbyte);
+                const uint_fast16_t c = ((wallTex[txoffset] >> (4 * (rowdata[x].texX & 1))) & 0b1111) << (4 * highbyte);
                 texY += rowdata[x].texZ;
 
-#endif
-//                cursprblock[spry * 16 + sprx] |= (0b11 << (4 * highbyte));
                 cursprblock[spry * 16 + sprx] |= c;
             }
         }
@@ -261,8 +316,114 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
     SPIFIFO.read();
 }
 
-void raycast(void) __attribute__((optimize("-O3")));
+void drawSprites(void) __attribute__((optimize("-O3")));
+void drawSprites(void)
+{
+    //sort sprites from far to close
+    for(uint_fast8_t i=0; i<NUM_SPRITES; ++i)
+    {
+        spriteOrder[i] = i;
+        spriteDistance[i] = ((fix16_to_float(posX) - sprites[i].x) * (fix16_to_float(posX) - sprites[i].x) + (fix16_to_float(posY) - sprites[i].y) * (fix16_to_float(posY) - sprites[i].y)); //sqrt not taken, unneeded
+    }
+    combSort(spriteOrder, spriteDistance, NUM_SPRITES);
 
+    //after sorting the sprites, do the projection and draw them
+    const float invDet = 1.0 / (fix16_to_float(planeX) * fix16_to_float(dirY) - fix16_to_float(dirX) * fix16_to_float(planeY)); //required for correct matrix multiplication
+    for(uint_fast8_t i=0; i<NUM_SPRITES; ++i)
+    {
+        //translate sprite position to relative to camera
+        const float spriteX = sprites[spriteOrder[i]].x - fix16_to_float(posX);
+        const float spriteY = sprites[spriteOrder[i]].y - fix16_to_float(posY);
+
+        //transform sprite with the inverse camera matrix
+        // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
+        // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
+        // [ planeY   dirY ]                                          [ -planeY  planeX ]
+
+        const float transformX = invDet * (fix16_to_float(dirY) * spriteX - fix16_to_float(dirX) * spriteY);
+        const float transformY = invDet * (-fix16_to_float(planeY) * spriteX + fix16_to_float(planeX) * spriteY); //this is actually the depth inside the screen, that what Z is in 3D
+
+        //the conditions in the if are:
+        //1) it's in front of camera plane so you don't see things behind you
+        //2) it's on the screen (left)
+        //3) it's on the screen (right)
+        //4) ZBuffer, with perpendicular distance
+        if (transformY <= 0)
+            continue;
+
+        const int_fast16_t spriteScreenX = int((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
+
+        //calculate height of the sprite on screen
+        const int_fast16_t spriteHeight = abs(int(SCREEN_HEIGHT_RAY / (transformY))); //using "transformY" instead of the real distance prevents fisheye
+
+        //calculate lowest and highest pixel to fill in current stripe
+        int_fast16_t drawStartY = -spriteHeight / 2 + SCREEN_HEIGHT_RAY / 2;
+        if (drawStartY < 0)
+            drawStartY = 0;
+        uint_fast16_t drawEndY = spriteHeight / 2 + SCREEN_HEIGHT_RAY / 2;
+        if (drawEndY >= SCREEN_HEIGHT_RAY)
+            drawEndY = SCREEN_HEIGHT_RAY - 1;
+
+        //calculate width of the sprite
+        const int_fast16_t spriteWidth = abs(int(SCREEN_HEIGHT_RAY / transformY));
+        int_fast16_t drawStartX = -spriteWidth / 2 + spriteScreenX;
+        if (drawStartX < 0)
+            drawStartX = 0;
+        uint_fast16_t drawEndX = spriteWidth / 2 + spriteScreenX;
+        if (drawEndX >= SCREEN_WIDTH)
+            drawEndX = SCREEN_WIDTH - 1;
+
+        Serial.print("Sprite/sy/ey/sx/ex/sw/sh/ssx/tfx/tfy: ");
+        Serial.print(i, DEC); Serial.print(", ");
+        Serial.print(drawStartY, DEC); Serial.print(", ");
+        Serial.print(drawEndY, DEC); Serial.print(", ");
+        Serial.print(drawStartX, DEC); Serial.print(", ");
+        Serial.print(drawEndX, DEC); Serial.print(", ");
+        Serial.print(spriteWidth, DEC); Serial.print(", ");
+        Serial.print(spriteHeight, DEC); Serial.print(", ");
+        Serial.print(transformX); Serial.print(", ");
+        Serial.print(transformY); Serial.print(", ");
+        Serial.println(spriteScreenX, DEC);
+
+        /*drawStartX = 0; drawEndX = 10;
+        drawStartY = 0; drawEndY = 10*/
+
+        //loop through every vertical stripe of the sprite on screen
+        for(uint_fast16_t stripe=drawStartX; stripe<drawEndX; ++stripe)
+        {
+            const uint_fast8_t highbyte = ((stripe & 31) >= 16);
+
+            const uint_fast8_t texX = int(256 * (stripe - (-spriteWidth / 2 + spriteScreenX)) * TEX_WIDTH / spriteWidth) / 256;
+            if ((stripe > 0) && (stripe < SCREEN_WIDTH) && (transformY < ZBuffer[stripe]))
+            {
+                for(uint_fast16_t y=drawStartY; y<drawEndY; ++y) //for every pixel of the current stripe
+                {
+                    const uint_fast16_t d = (y) * 256 - SCREEN_HEIGHT_RAY * 128 + spriteHeight * 128; //256 and 128 factors to avoid floats
+                    const uint_fast8_t texY = ((d * TEX_HEIGHT) / spriteHeight) / 256;
+                    const uint_fast16_t txoffset = (TEX_HEIGHT * texX) / 2 + texY / 2;
+                    const uint_fast16_t c = ((guardTex[txoffset] >> (4 * (texX & 1))) & 0b1111);
+
+                    if (c != 0)
+                    {
+                        // SLOW
+                        const uint_fast16_t sproffset = RAM_SPRIMG + ((y / 16) * ((SCREEN_WIDTH_SPR / 2) * 256)) +
+                                ((stripe / 32) * 256) + ((y & 15) * 16) + (stripe & 15);
+                        const uint_fast8_t oldc = GD.rd(sproffset);
+
+                        //                    GD.wr(sproffset, 0b11111111);
+
+                        if (highbyte)
+                            GD.wr(sproffset, (c << 4) | (oldc & 0b1111));
+                        else
+                            GD.wr(sproffset, c | (oldc & 0b11110000));
+                    }
+                }
+            }
+        }
+    }
+}
+
+void raycast(void) __attribute__((optimize("-O3")));
 void raycast()
 {
     static SRowData rowdata[SCREEN_WIDTH];
@@ -385,12 +546,16 @@ void raycast()
         rowdata[x].bottom = drawEnd;
         rowdata[x].lineHeight = lineHeight;
         rowdata[x].texZ = 256 * TEX_HEIGHT / rowdata[x].lineHeight;
+
+        // For sprites
+        ZBuffer[x] = fix16_to_float(perpWallDist); //perpendicular distance is used
     }
 
     GD.waitvblank();
 
     const uint32_t dtime = millis();
     drawScreen(rowdata);
+    drawSprites();
 
     Serial.print("dtime: "); Serial.println(millis() - dtime, DEC);
 }
