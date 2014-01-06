@@ -16,7 +16,23 @@
 
 namespace {
 
-void dumpSprite(const QImage &img, QTextStream &tstr, const QString &varbase)
+int getPixel(const QImage &img, int x, int y, int oldtransind)
+{
+    int ret = img.pixelIndex(x, y);
+
+    // fixup transparent pixels (in case the index was != 0)
+    if (oldtransind > 0)
+    {
+        if (ret == oldtransind)
+            ret = 0;
+        else if (ret == 0)
+            ret = oldtransind;
+    }
+
+    return ret;
+}
+
+void dumpSprite(const QImage &img, QTextStream &tstr, const QString &varbase, int oldtransind)
 {
     qDebug() << "dumpSprite:" << varbase;
 
@@ -27,7 +43,7 @@ void dumpSprite(const QImage &img, QTextStream &tstr, const QString &varbase)
         // Row data stored as nibbles, low byte == even px, high byte == odd px
         for (int x=0; x<64; x+=2)
         {
-            tstr << (img.pixelIndex(x, y) | (img.pixelIndex(x+1, y) << 4));
+            tstr << (getPixel(img, x, y, oldtransind) | (getPixel(img, x+1, y, oldtransind) << 4));
             if (((x+2) != 64) || ((y+1) != 64))
                 tstr << ", ";
         }
@@ -96,7 +112,9 @@ int main(int argc, char *argv[])
     tr.translate(32, 32);
     tr.rotate(270);
     tr.translate(-32, -32);
-    img = img.transformed(tr); // Save it rotated, as this speeds up displaying
+    img = img.transformed(tr).mirrored(false, true); // Save it rotated/mirrored, as this speeds up displaying
+
+//    img.save("temp.bmp");
 
     qDebug() << "Image color format:" << img.format();
 
@@ -114,15 +132,6 @@ int main(int argc, char *argv[])
         qDebug() << "RGB:" << c.red() << c.green() << c.blue();
     }
 
-    qDebug() << "Colors:";
-    for (int i=0; i<img.colorCount(); ++i)
-    {
-        const QRgb rgb(img.color(i));
-        qDebug() << "RGB:" << qRed(rgb) << qGreen(rgb) << qBlue(rgb);
-        /*if (rgb == qRgb(152, 0, 136)) // Sprite transparent color
-            img.setColor(i, qRgb(0, 0, 0));*/
-    }
-
     QFile outfile(args.at(2));
     if (!outfile.open(QFile::WriteOnly | QFile::Text))
         qFatal("Unable to open output file");
@@ -133,25 +142,49 @@ int main(int argc, char *argv[])
     const QString varbase = args.at(3);
 
     // palette
-    tstr << "static const uint16_t " << varbase << "Pal[] PROGMEM = {\n";
+
+    // First make sure that transparent color is set at index 0
+    const QRgb trRGB = qRgb(153, 0, 136);
+    int oldtransind = -1;
     for (int i=0; i<img.colorCount(); ++i)
     {
-        const QColor c(img.color(i));
+        const QRgb c(img.color(i));
+        if (c == trRGB)
+        {
+            oldtransind = i;
+            if (i != 0)
+            {
+                const QRgb swapc(img.color(0));
+                img.setColor(0, c);
+                img.setColor(i, swapc);
+            }
+            break;
+        }
+    }
+
+
+    tstr << "static const uint16_t " << varbase << "Pal[] PROGMEM = {\n";
+    qDebug() << "Colors:";
+    for (int i=0; i<img.colorCount(); ++i)
+    {
+        const QRgb c(img.color(i));
         tstr << "    ";
-        if (c.rgb() == qRgb(152, 0, 136))
+        if (c == trRGB)
             tstr << TRANSPARENT;
         else
-            tstr << RGB(c.red(), c.green(), c.blue());
+            tstr << RGB(qRed(c), qGreen(c), qBlue(c));
         if ((i+1) < img.colorCount())
             tstr << ", ";
         tstr << "\n";
+
+        qDebug() << "RGB: " << qRed(c) << qGreen(c) << qBlue(c);
     }
 
     tstr << "};\n\n";
 
 
     // Texture data
-    dumpSprite(img, tstr, varbase);
+    dumpSprite(img, tstr, varbase, oldtransind);
 
 #if 0
     for (int s=0; s<8; s+=2)

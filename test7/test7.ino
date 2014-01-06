@@ -294,7 +294,7 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
                 // Texture is stored as a 90 degree rotated 64x64 image,
                 // where each row is stored as 32x2 nibbles (even px=low byte, odd=high byte)
                 const uint_fast16_t txoffset = (TEX_HEIGHT * rowdata[x].texX) / 2 + (texY/256) / 2;
-                const uint_fast16_t c = ((wallTex[txoffset] >> (4 * (rowdata[x].texX & 1))) & 0b1111) << (4 * highbyte);
+                const uint_fast16_t c = ((wallTex[txoffset] >> (4 * ((texY/256) & 1))) & 0b1111) << (4 * highbyte);
                 texY += rowdata[x].texZ;
 
                 cursprblock[spry * 16 + sprx] |= c;
@@ -365,7 +365,7 @@ void drawSprites(void)
             drawEndY = SCREEN_HEIGHT_RAY - 1;
 
         //calculate width of the sprite
-        const int_fast16_t spriteWidth = abs(int(SCREEN_HEIGHT_RAY / transformY));
+        const int_fast16_t spriteWidth = abs(int(SCREEN_HEIGHT_RAY / transformY)) * 2;
         int_fast16_t drawStartX = -spriteWidth / 2 + spriteScreenX;
         if (drawStartX < 0)
             drawStartX = 0;
@@ -401,7 +401,10 @@ void drawSprites(void)
                     const uint_fast16_t d = (y) * 256 - SCREEN_HEIGHT_RAY * 128 + spriteHeight * 128; //256 and 128 factors to avoid floats
                     const uint_fast8_t texY = ((d * TEX_HEIGHT) / spriteHeight) / 256;
                     const uint_fast16_t txoffset = (TEX_HEIGHT * texX) / 2 + texY / 2;
-                    const uint_fast16_t c = ((guardTex[txoffset] >> (4 * (texX & 1))) & 0b1111);
+                    /*const*/ uint_fast16_t c = ((guardTex[txoffset] >> (4 * (texY & 1))) & 0b1111);
+
+                    if (c == 0)
+                        c = 15;
 
                     if (c != 0)
                     {
@@ -554,7 +557,7 @@ void raycast()
     GD.waitvblank();
 
     const uint32_t dtime = millis();
-    drawScreen(rowdata);
+//    drawScreen(rowdata);
     drawSprites();
 
     Serial.print("dtime: "); Serial.println(millis() - dtime, DEC);
