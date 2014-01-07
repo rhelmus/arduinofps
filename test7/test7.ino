@@ -111,6 +111,7 @@ fix16_t planeX = 0, planeY = F16(0.66); //the 2d raycaster version of camera pla
 
 //uint8_t texture[TEX_WIDTH * TEX_HEIGHT];
 
+#if 0
 struct Sprite
 {
     float x, y; // UNDONE: other type
@@ -124,8 +125,21 @@ const Sprite sprites[NUM_SPRITES] =
 };
 
 float ZBuffer[SCREEN_WIDTH];
-uint8_t spriteOrder[NUM_SPRITES];
-float spriteDistance[NUM_SPRITES];
+#else
+struct Sprite
+{
+    fix16_t x, y;
+    uint8_t tex;
+};
+
+const Sprite sprites[NUM_SPRITES] =
+{
+    { F16(20.5), F16(11.5), 0 },
+    //{ 18.5, 4.5, 0 }
+};
+
+fix16_t ZBuffer[SCREEN_WIDTH];
+#endif
 
 // --------
 
@@ -159,6 +173,7 @@ inline void SPIFIFOWrite16(uint32_t b, uint32_t cont)
     SPIFIFO.read();
 }
 
+#if 0
 void combSort(uint8_t *order, float *dist, uint8_t amount) __attribute__((optimize("-O3")));
 void combSort(uint8_t *order, float *dist, uint8_t amount)
 {
@@ -189,6 +204,38 @@ void combSort(uint8_t *order, float *dist, uint8_t amount)
         }
     }
 }
+#else
+void combSort(uint8_t *order, fix16_t *dist, uint8_t amount) __attribute__((optimize("-O3")));
+void combSort(uint8_t *order, fix16_t *dist, uint8_t amount)
+{
+#define SWAP_V(t, i, j) { t = i; i = j; j = t; }
+
+    uint_fast8_t gap = amount;
+    bool swapped = false;
+    fix16_t t;
+
+    while((gap > 1) || swapped)
+    {
+        //shrink factor 1.3
+        gap = (gap * 10) / 13;
+        if ((gap == 9) || (gap == 10))
+            gap = 11;
+        if (gap < 1)
+            gap = 1;
+        swapped = false;
+        for (uint_fast8_t i=0; i<(amount - gap); ++i)
+        {
+            const uint_fast8_t j = i + gap;
+            if (dist[i] < dist[j])
+            {
+                SWAP_V(t, dist[i], dist[j]);
+                SWAP_V(t, order[i], order[j]);
+                swapped = true;
+            }
+        }
+    }
+}
+#endif
 
 void initSprites(void)
 {
@@ -211,7 +258,7 @@ void initSprites(void)
     GD.sprite(203, SCREEN_STARTX - 16 - 1, SCREEN_STARTY + 96, 63, 0b0100);
     GD.sprite(204, SCREEN_STARTX - 16 - 1, SCREEN_STARTY + 128, 63, 0b0100);
     GD.sprite(205, SCREEN_STARTX - 16 - 1, SCREEN_STARTY + 160, 63, 0b0100);
-    GD.fill(RAM_SPRIMG + (63 * 256), 0b0001, 256);
+    GD.fill(RAM_SPRIMG + (63 * 256), 15, 256);
 }
 
 void initTextures(void)
@@ -291,7 +338,7 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
             for (uint_fast8_t spry=starty; spry<endy; ++spry)
             {
                 // UNDONE: Progmem
-                // Texture is stored as a 90 degree rotated 64x64 image,
+                // Texture is stored as a 90 degree rotated and mirrored 64x64 image,
                 // where each row is stored as 32x2 nibbles (even px=low byte, odd=high byte)
                 const uint_fast16_t txoffset = (TEX_HEIGHT * rowdata[x].texX) / 2 + (texY/256) / 2;
                 const uint_fast16_t c = ((wallTex[txoffset] >> (4 * ((texY/256) & 1))) & 0b1111) << (4 * highbyte);
@@ -317,6 +364,8 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
 }
 
 void drawSprites(void) __attribute__((optimize("-O3")));
+
+#if 0
 void drawSprites(void)
 {
     //sort sprites from far to close
@@ -365,6 +414,7 @@ void drawSprites(void)
             drawEndY = SCREEN_HEIGHT_RAY - 1;
 
         //calculate width of the sprite
+        // Note: multiplied by two: fix for vertically stretching sprites twice
         const int_fast16_t spriteWidth = abs(int(SCREEN_HEIGHT_RAY / transformY)) * 2;
         int_fast16_t drawStartX = -spriteWidth / 2 + spriteScreenX;
         if (drawStartX < 0)
@@ -385,9 +435,6 @@ void drawSprites(void)
         Serial.print(transformY); Serial.print(", ");
         Serial.println(spriteScreenX, DEC);
 
-        /*drawStartX = 0; drawEndX = 10;
-        drawStartY = 0; drawEndY = 10*/
-
         //loop through every vertical stripe of the sprite on screen
         for(uint_fast16_t stripe=drawStartX; stripe<drawEndX; ++stripe)
         {
@@ -401,10 +448,7 @@ void drawSprites(void)
                     const uint_fast16_t d = (y) * 256 - SCREEN_HEIGHT_RAY * 128 + spriteHeight * 128; //256 and 128 factors to avoid floats
                     const uint_fast8_t texY = ((d * TEX_HEIGHT) / spriteHeight) / 256;
                     const uint_fast16_t txoffset = (TEX_HEIGHT * texX) / 2 + texY / 2;
-                    /*const*/ uint_fast16_t c = ((guardTex[txoffset] >> (4 * (texY & 1))) & 0b1111);
-
-                    if (c == 0)
-                        c = 15;
+                    const uint_fast16_t c = ((guardTex[txoffset] >> (4 * (texY & 1))) & 0b1111);
 
                     if (c != 0)
                     {
@@ -425,6 +469,122 @@ void drawSprites(void)
         }
     }
 }
+#else
+void drawSprites(void)
+{
+    uint8_t spriteOrder[NUM_SPRITES];
+    fix16_t spriteDistance[NUM_SPRITES];
+
+    //sort sprites from far to close
+    for(uint_fast8_t i=0; i<NUM_SPRITES; ++i)
+    {
+        spriteOrder[i] = i;
+        //sqrt not taken, unneeded
+        spriteDistance[i] = fix16_add(fix16_sq(fix16_sub(posX, sprites[i].x)),
+                                      fix16_sq(fix16_sub(posY, sprites[i].y)));
+    }
+    combSort(spriteOrder, spriteDistance, NUM_SPRITES);
+
+    //after sorting the sprites, do the projection and draw them
+    const fix16_t invDet = fix16_div(fix16_one, fix16_sub(fix16_mul(planeX, dirY), fix16_mul(dirX, planeY))); //required for correct matrix multiplication
+    for(uint_fast8_t i=0; i<NUM_SPRITES; ++i)
+    {
+        //translate sprite position to relative to camera
+        const fix16_t spriteX = fix16_sub(sprites[spriteOrder[i]].x, posX);
+        const fix16_t spriteY = fix16_sub(sprites[spriteOrder[i]].y, posY);
+
+        //transform sprite with the inverse camera matrix
+        // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
+        // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
+        // [ planeY   dirY ]                                          [ -planeY  planeX ]
+
+        const fix16_t transformX = fix16_mul(invDet, fix16_sub(fix16_mul(dirY, spriteX), fix16_mul(dirX, spriteY)));
+        const fix16_t transformY = fix16_mul(invDet, fix16_add(fix16_mul(-planeY, spriteX), fix16_mul(planeX, spriteY))); //this is actually the depth inside the screen, that what Z is in 3D
+
+        //the conditions in the if are:
+        //1) it's in front of camera plane so you don't see things behind you
+        //2) it's on the screen (left)
+        //3) it's on the screen (right)
+        //4) ZBuffer, with perpendicular distance
+        if (transformY <= fix16_one)
+            continue;
+
+        const int_fast16_t spriteScreenX = fix16_to_int(fix16_mul(F16(SCREEN_WIDTH / 2), fix16_add(fix16_one, fix16_div(transformX, transformY))));
+
+        //calculate height of the sprite on screen
+        const int_fast16_t spriteHeight = abs(fix16_to_int(fix16_div(F16(SCREEN_HEIGHT_RAY), transformY))); //using "transformY" instead of the real distance prevents fisheye
+        // Note: multiplied by two: correction for vertically stretching sprites twice
+        // Note2: textures are square, so width and height are the same
+        const int_fast16_t spriteWidth = 2 * spriteHeight;
+
+        if ((spriteScreenX + spriteWidth) < 0)
+            continue; // Not in visible range
+
+        //calculate lowest and highest pixel to fill in current stripe
+        int_fast16_t drawStartY = -spriteHeight / 2 + SCREEN_HEIGHT_RAY / 2;
+        if (drawStartY < 0)
+            drawStartY = 0;
+        uint_fast16_t drawEndY = spriteHeight / 2 + SCREEN_HEIGHT_RAY / 2;
+        if (drawEndY >= SCREEN_HEIGHT_RAY)
+            drawEndY = SCREEN_HEIGHT_RAY - 1;
+
+        int_fast16_t drawStartX = -spriteWidth / 2 + spriteScreenX;
+        if (drawStartX < 0)
+            drawStartX = 0;
+        uint_fast16_t drawEndX = spriteWidth / 2 + spriteScreenX;
+        if (drawEndX >= SCREEN_WIDTH)
+            drawEndX = SCREEN_WIDTH - 1;
+
+#if 1
+        Serial.print("Sprite/sy/ey/sx/ex/sw/sh/ssx/tx/ty: ");
+        Serial.print(i, DEC); Serial.print(", ");
+        Serial.print(drawStartY, DEC); Serial.print(", ");
+        Serial.print(drawEndY, DEC); Serial.print(", ");
+        Serial.print(drawStartX, DEC); Serial.print(", ");
+        Serial.print(drawEndX, DEC); Serial.print(", ");
+        Serial.print(spriteWidth, DEC); Serial.print(", ");
+        Serial.print(spriteHeight, DEC); Serial.print(", ");
+        Serial.print(spriteScreenX, DEC); Serial.print(", ");
+        Serial.print(fix16_to_float(transformX), DEC); Serial.print(", ");
+        Serial.println(fix16_to_float(transformY), DEC);
+#endif
+
+        //loop through every vertical stripe of the sprite on screen
+        for (uint_fast16_t stripe=drawStartX; stripe<drawEndX; ++stripe)
+        {
+            const uint_fast8_t highbyte = ((stripe & 31) >= 16);
+
+            const uint_fast8_t texX = int(256 * (stripe - (-spriteWidth / 2 + spriteScreenX)) * TEX_WIDTH / spriteWidth) / 256;
+            if ((stripe > 0) && (stripe < SCREEN_WIDTH) && (transformY < ZBuffer[stripe]))
+            {
+                for (uint_fast16_t y=drawStartY; y<drawEndY; ++y) //for every pixel of the current stripe
+                {
+                    const uint_fast16_t d = (y) * 256 - SCREEN_HEIGHT_RAY * 128 + spriteHeight * 128; //256 and 128 factors to avoid floats
+                    const uint_fast8_t texY = ((d * TEX_HEIGHT) / spriteHeight) / 256;
+                    const uint_fast16_t txoffset = (TEX_HEIGHT * texX) / 2 + texY / 2;
+                    const uint_fast16_t c = ((guardTex[txoffset] >> (4 * (texY & 1))) & 0b1111);
+
+                    if (c != 0)
+                    {
+                        // SLOW
+                        const uint_fast16_t sproffset = RAM_SPRIMG + ((y / 16) * ((SCREEN_WIDTH_SPR / 2) * 256)) +
+                                ((stripe / 32) * 256) + ((y & 15) * 16) + (stripe & 15);
+                        const uint_fast8_t oldc = GD.rd(sproffset);
+
+                        //                    GD.wr(sproffset, 0b11111111);
+
+                        if (highbyte)
+                            GD.wr(sproffset, (c << 4) | (oldc & 0b1111));
+                        else
+                            GD.wr(sproffset, c | (oldc & 0b11110000));
+                    }
+                }
+            }
+        }
+    }
+}
+#endif
+
 
 void raycast(void) __attribute__((optimize("-O3")));
 void raycast()
@@ -551,13 +711,17 @@ void raycast()
         rowdata[x].texZ = 256 * TEX_HEIGHT / rowdata[x].lineHeight;
 
         // For sprites
+#if 0
         ZBuffer[x] = fix16_to_float(perpWallDist); //perpendicular distance is used
+#else
+        ZBuffer[x] = perpWallDist; //perpendicular distance is used
+#endif
     }
 
     GD.waitvblank();
 
     const uint32_t dtime = millis();
-//    drawScreen(rowdata);
+    drawScreen(rowdata);
     drawSprites();
 
     Serial.print("dtime: "); Serial.println(millis() - dtime, DEC);
