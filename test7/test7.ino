@@ -39,7 +39,7 @@ enum
     TEX_WIDTH = 64,
     TEX_HEIGHT = 64,
 
-    MAP_WIDTH = 24,
+    MAP_WIDTH = 24, // Both should be multiple of 8
     MAP_HEIGHT = 24,
 
     NUM_SPRITES = 1
@@ -77,7 +77,7 @@ const uint8_t worldMap[MAP_HEIGHT][MAP_WIDTH]=
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}
 };*/
 
-const uint8_t worldMap[MAP_HEIGHT][MAP_WIDTH]=
+const uint8_t worldMap[MAP_HEIGHT][MAP_WIDTH] =
 {
     {8,8,8,8,8,8,8,8,8,8,8,4,4,6,4,4,6,4,6,4,4,4,6,4},
     {8,0,0,0,0,0,0,0,0,0,8,4,0,0,0,0,0,0,0,0,0,0,0,4},
@@ -105,27 +105,41 @@ const uint8_t worldMap[MAP_HEIGHT][MAP_WIDTH]=
     {2,2,2,2,1,2,2,2,2,2,2,1,2,2,2,5,5,5,5,5,5,5,5,5}
 };
 
-fix16_t posX = F16(22), posY = F16(11.5);  //x and y start position
+/*
+const uint8_t worldMap[MAP_HEIGHT][MAP_WIDTH] =
+{
+    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}
+};*/
+
+fix16_t posX = F16(11.5), posY = F16(22);  //x and y start position
 fix16_t dirX = F16(-1), dirY = 0; //initial direction vector
 fix16_t planeX = 0, planeY = F16(0.66); //the 2d raycaster version of camera plane
 
 //uint8_t texture[TEX_WIDTH * TEX_HEIGHT];
 
-#if 0
-struct Sprite
-{
-    float x, y; // UNDONE: other type
-    uint8_t tex;
-};
-
-const Sprite sprites[NUM_SPRITES] =
-{
-    { 20.5, 11.5, 0 },
-    //{ 18.5, 4.5, 0 }
-};
-
-float ZBuffer[SCREEN_WIDTH];
-#else
 struct Sprite
 {
     fix16_t x, y;
@@ -134,14 +148,20 @@ struct Sprite
 
 const Sprite sprites[NUM_SPRITES] =
 {
-    { F16(20.5), F16(11.5), 0 },
+    { F16(11.5), F16(20.5), 0 },
     //{ 18.5, 4.5, 0 }
 };
 
 fix16_t ZBuffer[SCREEN_WIDTH];
-#endif
+uint8_t visibleCells[MAP_HEIGHT][MAP_WIDTH / 8];
 
 // --------
+
+// From fixint lib
+inline int fix16ToIntNoRound(fix16_t a)
+{
+    return (a >> 16);
+}
 
 void GDcopyram(uint16_t addr, uint8_t *src, uint16_t count)
 {
@@ -173,38 +193,6 @@ inline void SPIFIFOWrite16(uint32_t b, uint32_t cont)
     SPIFIFO.read();
 }
 
-#if 0
-void combSort(uint8_t *order, float *dist, uint8_t amount) __attribute__((optimize("-O3")));
-void combSort(uint8_t *order, float *dist, uint8_t amount)
-{
-#define SWAP_FLOAT(t, i, j) { t = i; i = j; j = t; }
-
-    uint_fast8_t gap = amount;
-    bool swapped = false;
-    float t;
-
-    while((gap > 1) || swapped)
-    {
-        //shrink factor 1.3
-        gap = (gap * 10) / 13;
-        if ((gap == 9) || (gap == 10))
-            gap = 11;
-        if (gap < 1)
-            gap = 1;
-        swapped = false;
-        for (uint_fast8_t i=0; i<(amount - gap); ++i)
-        {
-            const uint_fast8_t j = i + gap;
-            if (dist[i] < dist[j])
-            {
-                SWAP_FLOAT(t, dist[i], dist[j]);
-                SWAP_FLOAT(t, order[i], order[j]);
-                swapped = true;
-            }
-        }
-    }
-}
-#else
 void combSort(uint8_t *order, fix16_t *dist, uint8_t amount) __attribute__((optimize("-O3")));
 void combSort(uint8_t *order, fix16_t *dist, uint8_t amount)
 {
@@ -235,7 +223,6 @@ void combSort(uint8_t *order, fix16_t *dist, uint8_t amount)
         }
     }
 }
-#endif
 
 void initSprites(void)
 {
@@ -364,130 +351,34 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
 }
 
 void drawSprites(void) __attribute__((optimize("-O3")));
-
-#if 0
-void drawSprites(void)
-{
-    //sort sprites from far to close
-    for(uint_fast8_t i=0; i<NUM_SPRITES; ++i)
-    {
-        spriteOrder[i] = i;
-        spriteDistance[i] = ((fix16_to_float(posX) - sprites[i].x) * (fix16_to_float(posX) - sprites[i].x) + (fix16_to_float(posY) - sprites[i].y) * (fix16_to_float(posY) - sprites[i].y)); //sqrt not taken, unneeded
-    }
-    combSort(spriteOrder, spriteDistance, NUM_SPRITES);
-
-    //after sorting the sprites, do the projection and draw them
-    const float invDet = 1.0 / (fix16_to_float(planeX) * fix16_to_float(dirY) - fix16_to_float(dirX) * fix16_to_float(planeY)); //required for correct matrix multiplication
-    for(uint_fast8_t i=0; i<NUM_SPRITES; ++i)
-    {
-        //translate sprite position to relative to camera
-        const float spriteX = sprites[spriteOrder[i]].x - fix16_to_float(posX);
-        const float spriteY = sprites[spriteOrder[i]].y - fix16_to_float(posY);
-
-        //transform sprite with the inverse camera matrix
-        // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
-        // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
-        // [ planeY   dirY ]                                          [ -planeY  planeX ]
-
-        const float transformX = invDet * (fix16_to_float(dirY) * spriteX - fix16_to_float(dirX) * spriteY);
-        const float transformY = invDet * (-fix16_to_float(planeY) * spriteX + fix16_to_float(planeX) * spriteY); //this is actually the depth inside the screen, that what Z is in 3D
-
-        //the conditions in the if are:
-        //1) it's in front of camera plane so you don't see things behind you
-        //2) it's on the screen (left)
-        //3) it's on the screen (right)
-        //4) ZBuffer, with perpendicular distance
-        if (transformY <= 0)
-            continue;
-
-        const int_fast16_t spriteScreenX = int((SCREEN_WIDTH / 2) * (1 + transformX / transformY));
-
-        //calculate height of the sprite on screen
-        const int_fast16_t spriteHeight = abs(int(SCREEN_HEIGHT_RAY / (transformY))); //using "transformY" instead of the real distance prevents fisheye
-
-        //calculate lowest and highest pixel to fill in current stripe
-        int_fast16_t drawStartY = -spriteHeight / 2 + SCREEN_HEIGHT_RAY / 2;
-        if (drawStartY < 0)
-            drawStartY = 0;
-        uint_fast16_t drawEndY = spriteHeight / 2 + SCREEN_HEIGHT_RAY / 2;
-        if (drawEndY >= SCREEN_HEIGHT_RAY)
-            drawEndY = SCREEN_HEIGHT_RAY - 1;
-
-        //calculate width of the sprite
-        // Note: multiplied by two: fix for vertically stretching sprites twice
-        const int_fast16_t spriteWidth = abs(int(SCREEN_HEIGHT_RAY / transformY)) * 2;
-        int_fast16_t drawStartX = -spriteWidth / 2 + spriteScreenX;
-        if (drawStartX < 0)
-            drawStartX = 0;
-        uint_fast16_t drawEndX = spriteWidth / 2 + spriteScreenX;
-        if (drawEndX >= SCREEN_WIDTH)
-            drawEndX = SCREEN_WIDTH - 1;
-
-        Serial.print("Sprite/sy/ey/sx/ex/sw/sh/ssx/tfx/tfy: ");
-        Serial.print(i, DEC); Serial.print(", ");
-        Serial.print(drawStartY, DEC); Serial.print(", ");
-        Serial.print(drawEndY, DEC); Serial.print(", ");
-        Serial.print(drawStartX, DEC); Serial.print(", ");
-        Serial.print(drawEndX, DEC); Serial.print(", ");
-        Serial.print(spriteWidth, DEC); Serial.print(", ");
-        Serial.print(spriteHeight, DEC); Serial.print(", ");
-        Serial.print(transformX); Serial.print(", ");
-        Serial.print(transformY); Serial.print(", ");
-        Serial.println(spriteScreenX, DEC);
-
-        //loop through every vertical stripe of the sprite on screen
-        for(uint_fast16_t stripe=drawStartX; stripe<drawEndX; ++stripe)
-        {
-            const uint_fast8_t highbyte = ((stripe & 31) >= 16);
-
-            const uint_fast8_t texX = int(256 * (stripe - (-spriteWidth / 2 + spriteScreenX)) * TEX_WIDTH / spriteWidth) / 256;
-            if ((stripe > 0) && (stripe < SCREEN_WIDTH) && (transformY < ZBuffer[stripe]))
-            {
-                for(uint_fast16_t y=drawStartY; y<drawEndY; ++y) //for every pixel of the current stripe
-                {
-                    const uint_fast16_t d = (y) * 256 - SCREEN_HEIGHT_RAY * 128 + spriteHeight * 128; //256 and 128 factors to avoid floats
-                    const uint_fast8_t texY = ((d * TEX_HEIGHT) / spriteHeight) / 256;
-                    const uint_fast16_t txoffset = (TEX_HEIGHT * texX) / 2 + texY / 2;
-                    const uint_fast16_t c = ((guardTex[txoffset] >> (4 * (texY & 1))) & 0b1111);
-
-                    if (c != 0)
-                    {
-                        // SLOW
-                        const uint_fast16_t sproffset = RAM_SPRIMG + ((y / 16) * ((SCREEN_WIDTH_SPR / 2) * 256)) +
-                                ((stripe / 32) * 256) + ((y & 15) * 16) + (stripe & 15);
-                        const uint_fast8_t oldc = GD.rd(sproffset);
-
-                        //                    GD.wr(sproffset, 0b11111111);
-
-                        if (highbyte)
-                            GD.wr(sproffset, (c << 4) | (oldc & 0b1111));
-                        else
-                            GD.wr(sproffset, c | (oldc & 0b11110000));
-                    }
-                }
-            }
-        }
-    }
-}
-#else
 void drawSprites(void)
 {
     uint8_t spriteOrder[NUM_SPRITES];
     fix16_t spriteDistance[NUM_SPRITES];
+    uint8_t vissprites = 0;
 
     //sort sprites from far to close
     for(uint_fast8_t i=0; i<NUM_SPRITES; ++i)
     {
-        spriteOrder[i] = i;
-        //sqrt not taken, unneeded
-        spriteDistance[i] = fix16_add(fix16_sq(fix16_sub(posX, sprites[i].x)),
-                                      fix16_sq(fix16_sub(posY, sprites[i].y)));
+        const uint8_t mapx = fix16ToIntNoRound(sprites[i].x), mapy = fix16ToIntNoRound(sprites[i].y);
+        if (visibleCells[mapy][mapx / 8] & (1 << (mapx & 7))) // Visible?
+        {
+            spriteOrder[vissprites] = i;
+            //sqrt not taken, unneeded
+            spriteDistance[vissprites] = fix16_add(fix16_sq(fix16_sub(posX, sprites[i].x)),
+                                                   fix16_sq(fix16_sub(posY, sprites[i].y)));
+            ++vissprites;
+        }
     }
-    combSort(spriteOrder, spriteDistance, NUM_SPRITES);
+
+    if (!vissprites)
+        return
+
+    combSort(spriteOrder, spriteDistance, vissprites);
 
     //after sorting the sprites, do the projection and draw them
     const fix16_t invDet = fix16_div(fix16_one, fix16_sub(fix16_mul(planeX, dirY), fix16_mul(dirX, planeY))); //required for correct matrix multiplication
-    for(uint_fast8_t i=0; i<NUM_SPRITES; ++i)
+    for(uint_fast8_t i=0; i<vissprites; ++i)
     {
         //translate sprite position to relative to camera
         const fix16_t spriteX = fix16_sub(sprites[spriteOrder[i]].x, posX);
@@ -517,7 +408,7 @@ void drawSprites(void)
         // Note2: textures are square, so width and height are the same
         const int_fast16_t spriteWidth = 2 * spriteHeight;
 
-        if ((spriteScreenX + spriteWidth) < 0)
+        if ((spriteScreenX + spriteWidth/2) < 0)
             continue; // Not in visible range
 
         //calculate lowest and highest pixel to fill in current stripe
@@ -583,15 +474,15 @@ void drawSprites(void)
         }
     }
 }
-#endif
-
 
 void raycast(void) __attribute__((optimize("-O3")));
 void raycast()
 {
     static SRowData rowdata[SCREEN_WIDTH];
-    const uint_fast8_t iposx = fix16_to_int(posX);
-    const uint_fast8_t iposy = fix16_to_int(posY);
+    const uint_fast8_t iposx = fix16ToIntNoRound(posX);
+    const uint_fast8_t iposy = fix16ToIntNoRound(posY);
+
+    memset(visibleCells, 0, sizeof(visibleCells));
 
     fix16_t cameraX = F16(-1); //x-coordinate in camera space
     const fix16_t camxincr = fix16_div(F16(2), F16(SCREEN_WIDTH));
@@ -646,7 +537,7 @@ void raycast()
         }
 
         //perform DDA
-        do
+        while (true)
         {
             //jump to next map square, OR in x-direction, OR in y-direction
             if (sideDistX < sideDistY)
@@ -661,8 +552,12 @@ void raycast()
                 mapY += stepY;
                 side = 1;
             }
+
+            if (worldMap[mapY][mapX] == 0)
+                visibleCells[mapY][mapX / 8] |= (1 << (mapX & 7)); // every bit corresponds to X coord
+            else
+                break;
         }
-        while (worldMap[mapX][mapY] == 0);
 
         //Calculate distance projected on camera direction (oblique distance will give fisheye effect!)
         if (side == 0)
@@ -686,7 +581,7 @@ void raycast()
 
 
         //texturing calculations
-        rowdata[x].color = worldMap[mapX][mapY] - 1; //1 subtracted from it so that texture 0 can be used!
+        rowdata[x].color = worldMap[mapY][mapX] - 1; //1 subtracted from it so that texture 0 can be used!
 
         //calculate value of wallX
         fix16_t wallX; //where exactly the wall was hit
@@ -711,11 +606,7 @@ void raycast()
         rowdata[x].texZ = 256 * TEX_HEIGHT / rowdata[x].lineHeight;
 
         // For sprites
-#if 0
-        ZBuffer[x] = fix16_to_float(perpWallDist); //perpendicular distance is used
-#else
         ZBuffer[x] = perpWallDist; //perpendicular distance is used
-#endif
     }
 
     GD.waitvblank();
