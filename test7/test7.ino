@@ -623,6 +623,13 @@ void raycast()
 
 void setup()
 {
+    // Make sure ethernet doesn't interfere
+    pinMode(14, OUTPUT);
+    digitalWrite(14, HIGH);
+
+    pinMode(10, OUTPUT);
+    digitalWrite(10, HIGH);
+
     Serial.begin(115200);
     GD.begin();
     GD.wr16(BG_COLOR, RGB(0, 0, 0));
