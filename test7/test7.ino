@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <SPIFIFO.h>
 #include <GDT3.h>
+#include <SdFat.h>
 
 #include "fixmath.h"
 #include "guardtex.h"
@@ -155,6 +156,10 @@ const Sprite sprites[NUM_SPRITES] =
 fix16_t ZBuffer[SCREEN_WIDTH];
 uint8_t visibleCells[MAP_HEIGHT][MAP_WIDTH / 8];
 
+SdFat sd;
+SdFile sdFile;
+uint8_t guardTexBuffer[64 * 32];
+
 // --------
 
 // From fixint lib
@@ -254,6 +259,32 @@ void initTextures(void)
     // Initialize palette
 //    GD.copy(PALETTE16A, (const uint8_t *)wallPal, sizeof(wallPal));
     GD.copy(PALETTE16A, (const uint8_t *)guardPal, sizeof(guardPal));
+
+    SPIFIFO.begin(10, SPI_CLOCK_24MHz);
+
+    if (!sd.begin(7, SPI_FULL_SPEED)) // 7 is a dummy pin, we're using hardware CS
+    {
+        Serial.println("Failed to init SD!");
+        return;
+    }
+
+    if (!sdFile.open("guardtex.raw", O_READ))
+    {
+        Serial.println("Failed to open file!");
+        return;
+    }
+
+    sdFile.seekSet(16 * 2); // Skip palette for now
+
+    const uint32_t curtime = millis();
+
+    if (sdFile.read(guardTexBuffer, sizeof(guardTexBuffer)) != sizeof(guardTexBuffer))
+        Serial.println("Failed to read texture!");
+
+    Serial.print("read time: "); Serial.println(millis() - curtime, DEC);
+
+    sdFile.close();
+    SPIFIFO.begin(9, SPI_CLOCK_8MHz); // Go back to GD settings
 
 #elif 1
     GD.wr16(PALETTE16A, TRANSPARENT);
@@ -453,7 +484,7 @@ void drawSprites(void)
                     const uint_fast16_t d = (y) * 256 - SCREEN_HEIGHT_RAY * 128 + spriteHeight * 128; //256 and 128 factors to avoid floats
                     const uint_fast8_t texY = ((d * TEX_HEIGHT) / spriteHeight) / 256;
                     const uint_fast16_t txoffset = (TEX_HEIGHT * texX) / 2 + texY / 2;
-                    const uint_fast16_t c = ((guardTex[txoffset] >> (4 * (texY & 1))) & 0b1111);
+                    const uint_fast16_t c = ((guardTexBuffer[txoffset] >> (4 * (texY & 1))) & 0b1111);
 
                     if (c != 0)
                     {
@@ -623,6 +654,8 @@ void raycast()
 
 void setup()
 {
+    delay(2500);
+
     // Make sure ethernet doesn't interfere
     pinMode(14, OUTPUT);
     digitalWrite(14, HIGH);
