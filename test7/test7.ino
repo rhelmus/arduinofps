@@ -6,9 +6,8 @@
 #include <SdFat.h>
 
 #include "fixmath.h"
-#include "guardtex.h"
+#include "gfx.h"
 #include "render.h"
-#include "walltex.h"
 
 #define FRAMEBUFFER RAM_SPRIMG
 
@@ -258,7 +257,8 @@ void initTextures(void)
 #if 1
     // Initialize palette
 //    GD.copy(PALETTE16A, (const uint8_t *)wallPal, sizeof(wallPal));
-    GD.copy(PALETTE16A, (const uint8_t *)guardPal, sizeof(guardPal));
+//    GD.copy(PALETTE16A, (const uint8_t *)guardPal, sizeof(guardPal));
+    GD.copy(PALETTE16A, (const uint8_t *)palette, sizeof(palette));
 
     SPIFIFO.begin(10, SPI_CLOCK_24MHz);
 
@@ -268,13 +268,13 @@ void initTextures(void)
         return;
     }
 
-    if (!sdFile.open("guardtex.raw", O_READ))
+    if (!sdFile.open("sprites.raw", O_READ))
     {
         Serial.println("Failed to open file!");
         return;
     }
 
-    sdFile.seekSet(16 * 2); // Skip palette for now
+//    sdFile.seekSet(16 * 2); // Skip palette for now
 
     const uint32_t curtime = millis();
 
@@ -359,7 +359,7 @@ void drawScreen(struct SRowData * __restrict__ rowdata)
                 // Texture is stored as a 90 degree rotated and mirrored 64x64 image,
                 // where each row is stored as 32x2 nibbles (even px=low byte, odd=high byte)
                 const uint_fast16_t txoffset = (TEX_HEIGHT * rowdata[x].texX) / 2 + (texY/256) / 2;
-                const uint_fast16_t c = ((wallTex[txoffset] >> (4 * ((texY/256) & 1))) & 0b1111) << (4 * highbyte);
+                const uint_fast16_t c = ((wallTextures[txoffset + 4 * 2048] >> (4 * ((texY/256) & 1))) & 0b1111) << (4 * highbyte);
                 texY += rowdata[x].texZ;
 
                 cursprblock[spry * 16 + sprx] |= c;

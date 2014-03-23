@@ -21,6 +21,32 @@ uint16_t getGDRGB(const QRgb rgb)
     return RGB(qRed(rgb), qGreen(rgb), qBlue(rgb));
 }
 
+QImage getImage(const QString &fname)
+{
+    QImage img(fname);
+
+    if (img.depth() != 8)
+        qFatal("Only images with 8 bit depth are supported");
+
+#if 0
+    if (((img.width() % 64) != 0) || (img.height() != 64))
+    {
+        qDebug() << "img:" << fname << "w/h:" << img.width() << img.height();
+        qFatal("Wrong image size");
+    }
+#endif
+
+    QTransform tr;
+    tr.translate(img.width()/2, img.height()/2);
+    tr.rotate(270);
+    tr.translate(-img.width()/2, -img.height()/2);
+    img = img.transformed(tr).mirrored(false, true); // Save it rotated/mirrored, as this speeds up displaying
+
+//    img.save("temp.bmp");
+
+    return img;
+}
+
 int getPixel(const QImage &img, int x, int y, int oldtransind)
 {
     int ret = img.pixelIndex(x, y);
@@ -62,8 +88,9 @@ int fixColors(QImage &img)
     return oldtransind;
 }
 
-void dumpHeader(QImage &img, const QString &hname, const QString &varbase)
+void dumpHeader(const QString &iname, const QString &hname)
 {
+    QImage img(getImage(iname));
     QFile outfile(hname);
     if (!outfile.open(QFile::WriteOnly | QFile::Text))
         qFatal("Unable to open output file");
@@ -75,7 +102,7 @@ void dumpHeader(QImage &img, const QString &hname, const QString &varbase)
 
     const int oldtransind = fixColors(img);
 
-    tstr << "static const uint16_t " << varbase << "Pal[] PROGMEM = {\n";
+    tstr << "static const uint16_t palette[] PROGMEM = {\n";
 
     for (int i=0; i<img.colorCount(); ++i)
     {
@@ -93,15 +120,15 @@ void dumpHeader(QImage &img, const QString &hname, const QString &varbase)
     tstr << "};\n\n";
 
     // Texture data
-    tstr << "static const uint8_t " << varbase << "Tex[] PROGMEM = {\n";
+    tstr << "static const uint8_t wallTextures[] PROGMEM = {\n";
 
-    for (int y=0; y<64; ++y)
+    for (int y=0; y<img.height(); ++y)
     {
         // Row data stored as nibbles, low byte == even px, high byte == odd px
-        for (int x=0; x<64; x+=2)
+        for (int x=0; x<img.width(); x+=2)
         {
             tstr << (getPixel(img, x, y, oldtransind) | (getPixel(img, x+1, y, oldtransind) << 4));
-            if (((x+2) != 64) || ((y+1) != 64))
+            if (((x+2) != img.width()) || ((y+1) != img.height()))
                 tstr << ", ";
         }
 
@@ -115,34 +142,21 @@ void dumpHeader(QImage &img, const QString &hname, const QString &varbase)
 
 void testRawFile(const QImage &img, const QString &fname, int oldtransind);
 
-void dumpRawFile(QImage &img, const QString &fname)
+void dumpRawFile(const QString &iname, const QString &fname)
 {
+    QImage img(getImage(iname));
+
     QFile outfile(fname);
     if (!outfile.open(QFile::WriteOnly | QFile::Truncate))
         qFatal("Unable to open output file");
 
-    // palette
-
     const int oldtransind = fixColors(img);
 
-    for (int i=0; i<img.colorCount(); ++i)
-    {
-        uint16_t c;
-
-        if (i == 0)
-            c = TRANSPARENT;
-        else
-            c = getGDRGB(img.color(i));
-
-        outfile.putChar(c & 0xFF); // low
-        outfile.putChar(c >> 8); // high
-    }
-
     // Texture data
-    for (int y=0; y<64; ++y)
+    for (int y=0; y<img.height(); ++y)
     {
         // Row data stored as nibbles, low byte == even px, high byte == odd px
-        for (int x=0; x<64; x+=2)
+        for (int x=0; x<img.width(); x+=2)
             outfile.putChar(getPixel(img, x, y, oldtransind) |
                             (getPixel(img, x+1, y, oldtransind) << 4));
     }
@@ -158,23 +172,15 @@ void testRawFile(const QImage &img, const QString &fname, int oldtransind)
     if (!infile.open(QFile::ReadOnly))
         qFatal("Unable to open input file");
 
-    const QByteArray palba = infile.read(16 * 2); // palette (16 colors, 2 bytes for each color)
+    qDebug() << fname << "size:" << infile.size();
 
-    for (int i=0; i<img.colorCount(); ++i)
+    const QByteArray texby = infile.read(img.width() * img.height() / 2); // div 2: nibble per pixel
+
+    for (int y=0; y<img.height(); ++y)
     {
-        const uint16_t c = (uint8_t)palba.at(i * 2) | ((uint16_t)palba.at(i * 2 + 1) << 8);
-        const uint16_t imgc = (i == 0) ? TRANSPARENT : getGDRGB(img.color(i));
-        if (c != imgc)
-            qCritical() << "color index" << i << "differs:" << c << imgc;
-    }
-
-    const QByteArray texby = infile.read(64 * 32); // texture (64 * 64, nibble per pixel)
-
-    for (int y=0; y<64; ++y)
-    {
-        for (int x=0; x<64; x+=2)
+        for (int x=0; x<img.width(); x+=2)
         {
-            const uint8_t px = texby.at(y * (64/2) + (x/2));
+            const uint8_t px = texby.at(y * (img.width()/2) + (x/2));
             const uint8_t imgpx = getPixel(img, x, y, oldtransind) |
                             (getPixel(img, x+1, y, oldtransind) << 4);
             if (px != imgpx)
@@ -193,43 +199,12 @@ int main(int argc, char *argv[])
     QCoreApplication app(argc, argv);
 
     const QStringList args = app.arguments();
-    bool dumpheader = false;
 
-    if (args.size() > 1)
-    {
-        if (args.at(1) == "--header")
-            dumpheader = true;
-        else if (args.at(1) == "--raw")
-            dumpheader = false;
-        else
-            qFatal("Please specify --header or --raw");
-    }
+    if (args.size() < 5)
+        qFatal("Not enough arguments!\nUsage: <headerimg> <headerfile> <rawimg> <rawfile>");
 
-    if (args.size() < ((dumpheader) ? 5 : 4))
-        qFatal("Not enough arguments!\nUsage: [--header/--raw] <infile> <outfile> (<basename>)");
-
-    QImage img(args.at(2));
-
-    QTransform tr;
-    tr.translate(32, 32);
-    tr.rotate(270);
-    tr.translate(-32, -32);
-    img = img.transformed(tr).mirrored(false, true); // Save it rotated/mirrored, as this speeds up displaying
-
-//    img.save("temp.bmp");
-
-    qDebug() << "Image color format:" << img.format();
-
-    if (img.depth() != 8)
-        qFatal("Only images with 8 bit depth are supported");
-
-    if ((img.width() != 64) || (img.height() != 64))
-        qFatal("Only 64x64 images supported");
-
-    if (dumpheader)
-        dumpHeader(img, args.at(3), args.at(4));
-    else
-        dumpRawFile(img, args.at(3));
+    dumpHeader(args.at(1), args.at(2));
+    dumpRawFile(args.at(3), args.at(4));
 
     app.quit();
 }
