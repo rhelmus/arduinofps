@@ -88,8 +88,6 @@ void drawStripe(int x, float dist, int texture, int col)
         lastWallTex = texture;
     }
     
-//     const int y = max(0, (SCREEN_HEIGHT / 2) - (h / 2));
-//     h = min(h, SCREEN_HEIGHT - y);
     const int y = (SCREEN_HEIGHT / 2) - (h / 2);
     
     const Real sh = (Real)h / TEXTURE_SIZE;
@@ -105,8 +103,6 @@ void drawStripe(int x, float dist, int texture, int col)
     GD.Vertex2ii(x*2, /*y*/0, texture, col);
     Serial.printf("x/y/h/tex/col: %d/%d/%d/%d/%d\n", x, y, h, texture, col);
 }
-
-// #define NO_TEXTURES
 
 void render(void)
 {
@@ -124,18 +120,13 @@ void render(void)
     
     // floor
     GD.ScissorXY(0, SCREEN_HEIGHT*2 / 2 - 1);
-//      GD.ScissorSize(SCREEN_WIDTH, SCREEN_HEIGHT / 2);
     GD.ClearColorRGB(RGB(112, 112, 112));
     GD.Clear();
     GD.RestoreContext();
     
-#ifdef NO_TEXTURES
-    GD.Begin(LINES);
-#else
     GD.Begin(BITMAPS);
     GD.AlphaFunc(GREATER, 0); // for stencil: otherwise transparency doesn't work with overlapping gfx
     GD.StencilOp(REPLACE, REPLACE);
-#endif
     
     // cast all rays here
     Real sina = sin(cfg.angle);
@@ -150,7 +141,10 @@ void render(void)
     Real rayDists[SCREEN_WIDTH];
     bool spritevisible = false;
     
-    for (int ray = 0; ray < SCREEN_WIDTH; ++ray, u += du, v += dv) {
+    GD.SaveContext();
+    
+    for (int ray = 0; ray < SCREEN_WIDTH; ++ray, u += du, v += dv)
+    {
         // every time this ray advances 'u' units in x direction,
         // it also advanced 'v' units in y direction
         Real uu = (u < 0) ? -u : u;
@@ -226,37 +220,21 @@ void render(void)
                 spritevisible = true;
         }
         
-        // get the texture, note that the texture image
-        // has two textures horizontally, "normal" vs "dark"
         int col = static_cast<int>((1.0 - texofs) * TEXTURE_SIZE);
         col = constrain(col, 0, TEXTURE_SIZE - 1);
         texture = (texture - 1) % TEXTURE_COUNT;
-        /*
-        const QRgb *tex = texsrc + TEXTURE_BLOCK * texture * 2 +
-            (TEXTURE_SIZE * 2 * col);
-        if (dark)
-            tex += TEXTURE_SIZE;*/
-       
-       
-#ifdef NO_TEXTURES
-        // start from the texture center (horizontally)
-        //         int h = static_cast<int>(SCREEN_WIDTH / hitdist / 2);
-        const int h = static_cast<int>(SCREEN_HEIGHT / hitdist);
 
-        // start from the screen center (vertically)
-        // y1 will go up (decrease), y2 will go down (increase)
-        int y1 = SCREEN_HEIGHT / 2;
+        if (dark)
+            GD.ColorRGB(127, 127, 127);
+        else
+            GD.ColorRGB(255, 255, 255);
         
-        setColorFromPos(/*texture*/col % 8);
-        
-        GD.Vertex2ii(ray, max(0, y1-(h/2)));
-        GD.Vertex2ii(ray, min(SCREEN_HEIGHT, y1+(h/2)));
-#else
         drawStripe(ray, hitdist, texture, col);
-#endif
         
-        rayDists[ray] = hitdist;
+        rayDists[ray] = hitdist; // UNDONE: still need this?
     }
+    
+    GD.RestoreContext();
     
     if (spritevisible) // sprite cell is visible (--> sprite itself not necessarily)
     {
@@ -292,34 +270,6 @@ void render(void)
             GD.BitmapSize(NEAREST, BORDER, BORDER, sw*2, (SCREEN_HEIGHT - sxt) * 2);
             
             GD.Vertex2f(sxl*2 * 16, sxt*2 * 16);
-#if 0
-            // sprite may be incompletely visible, we can assume only a left part and/or right part is covered
-            
-            int left = 0;
-            while ((((sxl + left) < 0) || rayDists[(int)sxl + left] <= dist) && left < sw)
-                ++left;
-            
-            //        Q_ASSERT(left < sw);
-            
-            int csw = sw - left; // corrected width
-            while ((((sxl + left + csw) > SCREEN_WIDTH) || rayDists[(sxl + left + csw)-1] <= dist) && csw > 0)
-                --csw;
-
-            Serial.printf("sw/sh/sxl/sxt/left/csw/dist/rdist: %d/%d/%d/%d/%d/%d/%f/%f\n", sw, sh, sxl, sxt, left, csw, dist, rayDists[(sxl + left + csw)-1]);
-            
-            GD.BitmapHandle(SOLDIER_HANDLE);
-//             GD.BitmapSource(SOLDIER_OFFSET + (left * 2));
-//             GD.BitmapLayout(ARGB1555, SOLDIER_WIDTH * 2, SOLDIER_HEIGHT);
-            // subtract y (sxt) from height: if y < 0 then height needs to be more to fully display visible part
-            GD.BitmapSize(NEAREST, BORDER, BORDER, csw*2, (SCREEN_HEIGHT - sxt) * 2);
-            
-            GD.cmd_loadidentity();
-            GD.cmd_translate(F16(-left*2), F16(0));
-            GD.cmd_scale(F16(scalef*2), F16(scalef*2));
-            GD.cmd_setmatrix();
-            
-            GD.Vertex2f((sxl + left)*2 * 16, sxt*2 * 16);
-#endif
         }
     }
     
