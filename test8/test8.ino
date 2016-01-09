@@ -72,11 +72,6 @@ void setColorFromPos(int c)
 
 inline int stencilFromDist(float dist)
 {
-    /*Serial.printf("stencilFromDist: %f/%d\n", dist, static_cast<int>(dist + 0.5));
-    return min(static_cast<int>(dist + 0.5), 255); // UNDONE?*/
-    /*Serial.printf("stencilFromDist: %f/%d\n", dist, min(map(dist, 0, WORLD_MAX_LENGTH, 0, 255), 255));
-    return min(map(dist, 0, WORLD_MAX_LENGTH, 0, 255), 255);*/
-    Serial.printf("stencilFromDist: %f/%d\n", dist, static_cast<int>(dist * 255.0 / WORLD_MAX_LENGTH + 0.5));
     return min(static_cast<int>(dist * 255.0 / WORLD_MAX_LENGTH + 0.5), 255);
 }
 
@@ -116,9 +111,23 @@ void drawStripe(int x, float dist, int texture, int col)
 void render(void)
 {
     const uint32_t begintime = millis();
-    
+
     GD.ClearStencil(255);
     GD.Clear();
+    
+    // ceiling
+    GD.SaveContext();
+    GD.ScissorXY(0, 0);
+    GD.ScissorSize(SCREEN_WIDTH*2, SCREEN_HEIGHT*2 / 2);
+    GD.ClearColorRGB(RGB(56, 56, 56));
+    GD.Clear();
+    
+    // floor
+    GD.ScissorXY(0, SCREEN_HEIGHT*2 / 2 - 1);
+//      GD.ScissorSize(SCREEN_WIDTH, SCREEN_HEIGHT / 2);
+    GD.ClearColorRGB(RGB(112, 112, 112));
+    GD.Clear();
+    GD.RestoreContext();
     
 #ifdef NO_TEXTURES
     GD.Begin(LINES);
@@ -259,7 +268,7 @@ void render(void)
         const Real scalef = size / TEXTURE_SIZE;
         
         const int sx = tan(sangle) * SCREEN_HEIGHT;
-        const int sw = scalef * SOLDIER_WIDTH;
+        int sw = scalef * SOLDIER_WIDTH;
         const int sh = scalef * SOLDIER_HEIGHT;
         const int sxl = SCREEN_WIDTH/2 - sx - (sw/2);
         const int sxt = (SCREEN_HEIGHT - sh) / 2;
@@ -268,6 +277,9 @@ void render(void)
         if (sxl < SCREEN_WIDTH && (sxl + sw) >= 0)
         {
             lastWallTex = -1; // reset because we're messing with settings
+            
+            if ((sxl + sw) > SCREEN_WIDTH)
+                sw = SCREEN_WIDTH - sxl;
             
             GD.cmd_loadidentity();
             GD.cmd_scale(F16(scalef*2), F16(scalef*2));
