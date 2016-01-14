@@ -3,6 +3,7 @@
 #include <GD2.h>
 
 #include "assets.h"
+#include "gfx.h"
 #include "world.h"
 
 namespace {
@@ -57,7 +58,7 @@ void World::drawStripe(int x, float dist, int texture, int col)
     {
         // need to set it for every handle (texture), cache to save some GD gfx list memory
         GD.BitmapHandle(texture);
-        GD.BitmapSize(NEAREST, BORDER, BORDER, WALL0_WIDTH*2, SCREEN_HEIGHT*2);
+        GD.BitmapSize(NEAREST, BORDER, BORDER, /*WALL0_WIDTH*2*/2, SCREEN_HEIGHT*2);
         lastWallTexture = texture;
     }
     
@@ -66,13 +67,13 @@ void World::drawStripe(int x, float dist, int texture, int col)
     const Real sh = (Real)h / TEXTURE_SIZE;
     
     GD.cmd_loadidentity();
-    GD.cmd_translate(F16(0), F16(y*2)); // need to translate: normally images drawn at y<0 are simply discarded completely
+    GD.cmd_translate(F16(-col*2), F16(y*2)); // need to translate: normally images drawn at y<0 are simply discarded completely
     GD.cmd_scale(F16(2.0), F16(sh*2));
     GD.cmd_setmatrix();
     
     GD.StencilFunc(ALWAYS, stencilFromDist(dist), 255);
     
-    GD.Vertex2ii(x*2, /*y*/0, texture, col);
+    GD.Vertex2ii(x*2, /*y*/0, texture/*, col*/);
 //    Serial.printf("x/y/h/tex/col: %d/%d/%d/%d/%d\n", x, y, h, texture, col);
 }
 
@@ -303,6 +304,32 @@ void World::handleInput()
     }
 }
 
+void World::setup()
+{
+    const uint32_t begintime = millis();
+
+    for (int i=0; i<8; ++i)
+    {
+        GD.BitmapHandle(i);
+        GD.BitmapSource(i * WALL0_ASSETS_END);
+//        GD.BitmapSize(NEAREST, BORDER, BORDER, WALL0_IMG_WIDTH, WALL0_IMG_HEIGHT);
+        GD.BitmapLayout(RGB565, WALL0_IMG_WIDTH * 2, WALL0_IMG_HEIGHT);
+        GD.cmd_inflate(i * WALL0_ASSETS_END);
+        char fname[20];
+        sprintf(fname, "wall%d.gd2", i);
+        GD.safeload(fname);
+    }
+
+    GD.BitmapHandle(8);
+    GD.BitmapSource(8 * WALL0_ASSETS_END);
+//        GD.BitmapSize(NEAREST, BORDER, BORDER, WALL0_IMG_WIDTH, WALL0_IMG_HEIGHT);
+    GD.BitmapLayout(ARGB1555, SOLDIER0_IMG_WIDTH * 2, SOLDIER0_IMG_HEIGHT);
+    GD.cmd_inflate(8 * WALL0_ASSETS_END);
+    GD.safeload("soldier0.gd2");
+
+    Serial.printf("load time: %d\n", millis() - begintime);
+}
+
 void World::update()
 {
     handleInput();
@@ -319,8 +346,9 @@ void World::update()
 void setup()
 {
     GD.begin();
-    LOAD_ASSETS();
+//    LOAD_ASSETS();
     Serial.begin(115200);
+    world.setup();
 }
 
 void loop()

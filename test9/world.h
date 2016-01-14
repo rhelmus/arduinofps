@@ -114,6 +114,7 @@ class World
 public:
     World(void);
 
+    void setup(void);
     void update(void);
 };
 
