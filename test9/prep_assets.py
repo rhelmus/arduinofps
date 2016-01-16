@@ -123,23 +123,22 @@ if __name__ == '__main__':
             BaseAsset(e["filename"], e["name"], e["fmt"], h, ("%s/%s.gd2") % (gdir, e["name"])).make()
             print >>gfxheader, ("#include \"%s\"") % h
 
-        print >>gfxheader, "\nenum\n{"
+        print >>gfxheader, "\nenum Sprite\n{"
         for e in gfxEntries:
-            print >>gfxheader, ("    GFX_%s,") % e["name"].upper()
-        print >>gfxheader, "    GFX_END\n};"
+            print >>gfxheader, ("    SPRITE_%s,") % e["name"].upper()
+        print >>gfxheader, "    SPRITE_END,\n    SPRITE_NONE\n};"
 
         print >>gfxheader, """
 struct SpriteInfo
 {
-    const char *name;
     const char *file;
     int width, height;
     int fmt;
     uint32_t size;
 };"""
 
-        print >>gfxheader, ("\nconst SpriteInfo sprites[GFX_END-1]\n{")
+        print >>gfxheader, ("\nconst SpriteInfo sprites[SPRITE_END]\n{")
         for e in gfxEntries:
-            print >>gfxheader, ("    {{ \"{0}\", \"{1}\", {2}_IMG_WIDTH, {2}_IMG_HEIGHT, {3}, {2}_ASSETS_END }},").format(e["name"], e["filename"], e["name"].upper(), e["fmt"])
+            print >>gfxheader, ("    {{ \"{0}.gd2\", {1}_IMG_WIDTH, {1}_IMG_HEIGHT, {2}, {1}_ASSETS_END }},").format(e["name"], e["name"].upper(), e["fmt"])
         print >>gfxheader, "};"
 

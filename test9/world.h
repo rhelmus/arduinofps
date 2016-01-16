@@ -4,6 +4,8 @@
 #include <math.h>
 #include <stdint.h>
 
+#include "gfx.h"
+
 enum
 {
     SCREEN_WIDTH = 200,
@@ -13,7 +15,8 @@ enum
     TEXTURE_SIZE = 64,
     TEXTURE_COUNT = 8,
     MAX_STATIC_ENTITIES = 128,
-    MAX_ENEMIES = 128
+    MAX_ENEMIES = 128,
+    SPRITE_BLOCK = 8192UL,
 };
 
 typedef float Real;
@@ -89,27 +92,20 @@ class World
     uint8_t enemyCount = 0;
     uint8_t entityCount = 0;
 
-    int lastWallTexture = -1;
+    Sprite currentLoadedSprite = SPRITE_NONE;
+    int currentLoadedSpriteW = -1, currentLoadedSpriteH = -1;
     bool visibleCells[WORLD_SIZE][WORLD_SIZE]; // filled during every ray cast session
     bool dirty = true;
 
-    void drawStripe(int x, float dist, int texture, int col);
+    void initSprite(Sprite s, int w=-1, int h=-1);
+    void drawStripe(int x, float dist, Sprite texture, int col);
     void preRender(void);
     void rayCast(void);
     void drawEntities(void);
     void render(void);
     void handleInput(void);
 
-    void addStaticEntity(const Vec2D &pos, Entity::Flags flags)
-    {
-        staticEntityStore[staticEntityCount].setPos(pos);
-        staticEntityStore[staticEntityCount].setFlags(flags);
-
-        entities[entityCount] = &staticEntityStore[staticEntityCount];
-
-        ++staticEntityCount;
-        ++entityCount;
-    }
+    void addStaticEntity(const Vec2D &pos, Entity::Flags flags);
 
 public:
     World(void);

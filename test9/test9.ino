@@ -2,8 +2,6 @@
 #include <SPI.h>
 #include <GD2.h>
 
-#include "assets.h"
-#include "gfx.h"
 #include "world.h"
 
 namespace {
@@ -50,18 +48,43 @@ World::World()
     addStaticEntity(Vec2D(3.5, 3.5), Entity::FLAG_ENABLED);
 }
 
-void World::drawStripe(int x, float dist, int texture, int col)
+void World::initSprite(Sprite s, int w, int h)
+{
+    if (currentLoadedSprite != s)
+    {
+        GD.BitmapSource(s * SPRITE_BLOCK);
+        GD.BitmapLayout(sprites[s].fmt, sprites[s].width * 2, sprites[s].height);
+        currentLoadedSprite = s;
+    }
+
+    if (w == -1)
+        w = sprites[s].width;
+    if (h == -1)
+        h = sprites[s].height;
+
+    if (currentLoadedSpriteW != w || currentLoadedSpriteH != h)
+    {
+        GD.BitmapSize(NEAREST, BORDER, BORDER, w, h);
+        currentLoadedSpriteW = w; currentLoadedSpriteH = h;
+    }
+}
+
+void World::drawStripe(int x, float dist, Sprite texture, int col)
 {
     const int h = static_cast<int>(SCREEN_HEIGHT / dist);
-    
-    if (lastWallTexture != texture)
+
+#if 0
+    if (currentLoadedSprite != texture)
     {
         // need to set it for every handle (texture), cache to save some GD gfx list memory
         GD.BitmapHandle(texture);
         GD.BitmapSize(NEAREST, BORDER, BORDER, /*WALL0_WIDTH*2*/2, SCREEN_HEIGHT*2);
-        lastWallTexture = texture;
+        currentLoadedSprite = texture;
     }
-    
+#endif
+
+    initSprite(texture, 2, SCREEN_HEIGHT*2);
+
     const int y = (SCREEN_HEIGHT / 2) - (h / 2);
     
     const Real sh = (Real)h / TEXTURE_SIZE;
@@ -73,7 +96,7 @@ void World::drawStripe(int x, float dist, int texture, int col)
     
     GD.StencilFunc(ALWAYS, stencilFromDist(dist), 255);
     
-    GD.Vertex2ii(x*2, /*y*/0, texture/*, col*/);
+    GD.Vertex2f(x*2 * 16, 0 * 16);
 //    Serial.printf("x/y/h/tex/col: %d/%d/%d/%d/%d\n", x, y, h, texture, col);
 }
 
@@ -98,6 +121,10 @@ void World::preRender()
     GD.Begin(BITMAPS);
     GD.AlphaFunc(GREATER, 0); // for stencil: otherwise transparency doesn't work with overlapping gfx
     GD.StencilOp(REPLACE, REPLACE);
+
+    // needs to be reset every render frame to ensure up to date settings
+    currentLoadedSprite = SPRITE_NONE;
+    currentLoadedSpriteW = currentLoadedSpriteH = -1;
 }
 
 void World::rayCast()
@@ -206,7 +233,7 @@ void World::rayCast()
             wasdark = dark;
         }
 
-        drawStripe(ray, hitdist, texture, col);
+        drawStripe(ray, hitdist, static_cast<Sprite>(texture), col);
     }
     
     GD.RestoreContext();
@@ -233,18 +260,18 @@ void World::drawEntities()
         const Real scalef = size / TEXTURE_SIZE;
 
         const int sx = tan(sangle) * SCREEN_HEIGHT;
-        int sw = scalef * SOLDIER_WIDTH;
-        const int sh = scalef * SOLDIER_HEIGHT;
+        int sw = scalef * SOLDIER0_IMG_WIDTH;
+        const int sh = scalef * SOLDIER0_IMG_HEIGHT;
         const int sxl = SCREEN_WIDTH/2 - sx - (sw/2);
         const int sxt = (SCREEN_HEIGHT - sh) / 2;
 
         // is the sprite at least partially visible?
         if (sxl < SCREEN_WIDTH && (sxl + sw) >= 0)
         {
-            lastWallTexture = -1; // reset because we're messing with settings
-
             if ((sxl + sw) > SCREEN_WIDTH)
                 sw = SCREEN_WIDTH - sxl;
+
+            initSprite(SPRITE_SOLDIER0, sw*2, (SCREEN_HEIGHT - sxt) * 2);
 
             GD.cmd_loadidentity();
             GD.cmd_scale(F16(scalef*2), F16(scalef*2));
@@ -252,8 +279,8 @@ void World::drawEntities()
 
             GD.StencilFunc(GREATER, stencilFromDist(dist), 255);
 
-            GD.BitmapHandle(SOLDIER_HANDLE);
-            GD.BitmapSize(NEAREST, BORDER, BORDER, sw*2, (SCREEN_HEIGHT - sxt) * 2);
+            /*GD.BitmapHandle(SOLDIER_HANDLE);
+            GD.BitmapSize(NEAREST, BORDER, BORDER, sw*2, (SCREEN_HEIGHT - sxt) * 2);*/
 
             GD.Vertex2f(sxl*2 * 16, sxt*2 * 16);
         }
@@ -304,10 +331,22 @@ void World::handleInput()
     }
 }
 
+void World::addStaticEntity(const Vec2D &pos, Entity::Flags flags)
+{
+    staticEntityStore[staticEntityCount].setPos(pos);
+    staticEntityStore[staticEntityCount].setFlags(flags);
+
+    entities[entityCount] = &staticEntityStore[staticEntityCount];
+
+    ++staticEntityCount;
+    ++entityCount;
+}
+
 void World::setup()
 {
     const uint32_t begintime = millis();
 
+#if 0
     for (int i=0; i<8; ++i)
     {
         GD.BitmapHandle(i);
@@ -326,6 +365,16 @@ void World::setup()
     GD.BitmapLayout(ARGB1555, SOLDIER0_IMG_WIDTH * 2, SOLDIER0_IMG_HEIGHT);
     GD.cmd_inflate(8 * WALL0_ASSETS_END);
     GD.safeload("soldier0.gd2");
+#endif
+
+    for (int i=0; i<SPRITE_END; ++i)
+    {
+//        GD.BitmapHandle(i);
+        GD.BitmapSource(i * WALL0_ASSETS_END);
+        GD.BitmapLayout(sprites[i].fmt, sprites[i].width * 2, sprites[i].height);
+        GD.cmd_inflate(i * SPRITE_BLOCK);
+        GD.safeload(sprites[i].file);
+    }
 
     Serial.printf("load time: %d\n", millis() - begintime);
 }
@@ -346,7 +395,6 @@ void World::update()
 void setup()
 {
     GD.begin();
-//    LOAD_ASSETS();
     Serial.begin(115200);
     world.setup();
 }
