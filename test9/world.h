@@ -17,6 +17,9 @@ enum
     MAX_STATIC_ENTITIES = 128,
     MAX_ENEMIES = 128,
     SPRITE_BLOCK = 8192UL,
+    MAX_LOADED_SPRITES = 28,
+    SPRITE_NOT_LOADED = -1,
+    SPRITE_SHOULD_LOAD = -2,
 };
 
 typedef float Real;
@@ -81,7 +84,16 @@ class World
 {
     struct RayInfo
     {
-        uint8_t mapX, mapY;
+        Real hitDist;
+        Sprite texture;
+        uint8_t texColumn;
+        bool dark;
+    };
+
+    struct SpriteGfxInfo
+    {
+        int8_t gfxIndex = SPRITE_NOT_LOADED; // index in loadedSprites
+        uint32_t lastRayFrameNumber = 0;
     };
 
     Player player;
@@ -94,13 +106,23 @@ class World
 
     Sprite currentLoadedSprite = SPRITE_NONE;
     int currentLoadedSpriteW = -1, currentLoadedSpriteH = -1;
-    bool visibleCells[WORLD_SIZE][WORLD_SIZE]; // filled during every ray cast session
+    uint32_t rayFrameNumber = 0;
+    SpriteGfxInfo spriteGfxInfo[SPRITE_END];
+    Sprite loadedSprites[MAX_LOADED_SPRITES];
     bool dirty = true;
+
+    // filled during every ray cast session
+    bool visibleCells[WORLD_SIZE][WORLD_SIZE];
+    RayInfo rayCastInfo[SCREEN_WIDTH];
+    Sprite spritesToLoad[MAX_LOADED_SPRITES];
+    uint8_t spritesToLoadCount = 0;
 
     void initSprite(Sprite s, int w=-1, int h=-1);
     void drawStripe(int x, float dist, Sprite texture, int col);
-    void preRender(void);
     void rayCast(void);
+    void loadSprites(void);
+    void preRender(void);
+    void drawWorld(void);
     void drawEntities(void);
     void render(void);
     void handleInput(void);

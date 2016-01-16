@@ -41,6 +41,8 @@ World world;
 
 World::World()
 {
+    memset(loadedSprites, SPRITE_NONE, sizeof(loadedSprites));
+
     player.setAngle(0.5);
     player.setPos(1.5, 1.5);
 
@@ -88,35 +90,10 @@ void World::drawStripe(int x, float dist, Sprite texture, int col)
 //    Serial.printf("x/y/h/tex/col: %d/%d/%d/%d/%d\n", x, y, h, texture, col);
 }
 
-void World::preRender()
-{
-    GD.ClearStencil(255);
-    GD.Clear();
-
-    // ceiling
-    GD.SaveContext();
-    GD.ScissorXY(0, 0);
-    GD.ScissorSize(SCREEN_WIDTH*2, SCREEN_HEIGHT*2 / 2);
-    GD.ClearColorRGB(RGB(56, 56, 56));
-    GD.Clear();
-
-    // floor
-    GD.ScissorXY(0, SCREEN_HEIGHT*2 / 2 - 1);
-    GD.ClearColorRGB(RGB(112, 112, 112));
-    GD.Clear();
-    GD.RestoreContext();
-
-    GD.Begin(BITMAPS);
-    GD.AlphaFunc(GREATER, 0); // for stencil: otherwise transparency doesn't work with overlapping gfx
-    GD.StencilOp(REPLACE, REPLACE);
-
-    // needs to be reset every render frame to ensure up to date settings
-    currentLoadedSprite = SPRITE_NONE;
-    currentLoadedSpriteW = currentLoadedSpriteH = -1;
-}
-
 void World::rayCast()
 {
+    ++rayFrameNumber;
+
     // cast all rays here
     Real sina = sin(player.getAngle());
     Real cosa = cos(player.getAngle());
@@ -125,11 +102,7 @@ void World::rayCast()
     Real du = 2 * sina / SCREEN_WIDTH;
     Real dv = -2 * cosa / SCREEN_WIDTH;
     
-    GD.SaveContext();
-    
     memset(visibleCells, false, sizeof(visibleCells));
-
-    bool wasdark = false;
 
     for (int ray = 0; ray < SCREEN_WIDTH; ++ray, u += du, v += dv)
     {
@@ -153,7 +126,7 @@ void World::rayCast()
         Real hitdist = 0.1;
         Real texofs = 0;
         bool dark = false;
-        
+
         // first hit at constant x and constant y lines
         Real distx = (u > 0) ? (mapx + 1 - px) * duu : (px - mapx) * duu;
         Real disty = (v > 0) ? (mapy + 1 - py) * dvv : (py - mapy) * dvv;
@@ -211,19 +184,109 @@ void World::rayCast()
         col = constrain(col, 0, TEXTURE_SIZE - 1);
         texture = (texture - 1) % TEXTURE_COUNT;
 
-        if (wasdark != dark)
+        rayCastInfo[ray].dark = dark;
+        rayCastInfo[ray].hitDist = hitdist;
+        rayCastInfo[ray].texColumn = col;
+        rayCastInfo[ray].texture = static_cast<Sprite>(texture);
+
+        spriteGfxInfo[texture].lastRayFrameNumber = rayFrameNumber; // mark it visible during this frame
+        if (spriteGfxInfo[texture].gfxIndex == SPRITE_NOT_LOADED) // not yet loaded into GD2 memory?
         {
-            if (dark)
+            spriteGfxInfo[texture].gfxIndex = SPRITE_SHOULD_LOAD; // make sure to only add it once
+            spritesToLoad[spritesToLoadCount] = rayCastInfo[ray].texture;
+            ++spritesToLoadCount;
+        }
+    }
+}
+
+void World::loadSprites()
+{
+    // load new sprites into GD2 and replace old ones if possible
+    if (spritesToLoadCount)
+    {
+        if (spritesToLoadCount > MAX_LOADED_SPRITES)
+        {
+            Serial.printf("WARNING!! Too many sprites need be loaded (%d, max: %d)\n",
+                          spritesToLoadCount, MAX_LOADED_SPRITES);
+            spritesToLoadCount = MAX_LOADED_SPRITES;
+        }
+
+        int lastGfxIndex = 0;
+        for (int s=0; s<spritesToLoadCount; ++s)
+        {
+            // find a free slot: only sprites that need be available have a current frame number
+            while (loadedSprites[lastGfxIndex] != SPRITE_NONE &&
+                   spriteGfxInfo[loadedSprites[lastGfxIndex]].lastRayFrameNumber == rayFrameNumber)
+                ++lastGfxIndex;
+
+            if (loadedSprites[lastGfxIndex] != SPRITE_NONE)
+                spriteGfxInfo[loadedSprites[lastGfxIndex]].gfxIndex = -1; // mark as not loaded
+
+            spriteGfxInfo[spritesToLoad[s]].gfxIndex = lastGfxIndex;
+            spriteGfxInfo[spritesToLoad[s]].lastRayFrameNumber = rayFrameNumber;
+            loadedSprites[lastGfxIndex] = spritesToLoad[s];
+
+            // load actual sprite
+            // UNDONE
+//            Serial.print("LOAD: "); Serial.print(sprites[spritesToLoad[s]]);
+//            Serial.print(" @ "); Serial.println(lastGfxIndex);
+            Serial.printf("LOAD: %s @ %d\n", sprites[spritesToLoad[s]].file, lastGfxIndex);
+
+            ++lastGfxIndex; // no need to check for this (and previous) index again
+        }
+
+        spritesToLoadCount = 0;
+    }
+}
+
+void World::preRender()
+{
+    GD.ClearStencil(255);
+    GD.Clear();
+
+    // ceiling
+    GD.SaveContext();
+    GD.ScissorXY(0, 0);
+    GD.ScissorSize(SCREEN_WIDTH*2, SCREEN_HEIGHT*2 / 2);
+    GD.ClearColorRGB(RGB(56, 56, 56));
+    GD.Clear();
+
+    // floor
+    GD.ScissorXY(0, SCREEN_HEIGHT*2 / 2 - 1);
+    GD.ClearColorRGB(RGB(112, 112, 112));
+    GD.Clear();
+    GD.RestoreContext();
+
+    GD.Begin(BITMAPS);
+    GD.AlphaFunc(GREATER, 0); // for stencil: otherwise transparency doesn't work with overlapping gfx
+    GD.StencilOp(REPLACE, REPLACE);
+
+    // needs to be reset every render frame to ensure up to date settings
+    currentLoadedSprite = SPRITE_NONE;
+    currentLoadedSpriteW = currentLoadedSpriteH = -1;
+}
+
+void World::drawWorld()
+{
+    GD.SaveContext();
+
+    bool wasdark = false;
+    for (int ray=0; ray<SCREEN_WIDTH; ++ray)
+    {
+        if (wasdark != rayCastInfo[ray].dark)
+        {
+            if (rayCastInfo[ray].dark)
                 GD.ColorRGB(127, 127, 127);
             else
                 GD.ColorRGB(255, 255, 255);
 
-            wasdark = dark;
+            wasdark = rayCastInfo[ray].dark;
         }
 
-        drawStripe(ray, hitdist, static_cast<Sprite>(texture), col);
+        drawStripe(ray, rayCastInfo[ray].hitDist, rayCastInfo[ray].texture,
+                   rayCastInfo[ray].texColumn);
     }
-    
+
     GD.RestoreContext();
 }
 
@@ -276,8 +339,10 @@ void World::render()
 {
     const uint32_t begintime = millis();
 
-    preRender();
     rayCast();
+    loadSprites();
+    preRender();
+    drawWorld();
     drawEntities();
 
     GD.finish();
