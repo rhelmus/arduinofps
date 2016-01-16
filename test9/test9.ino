@@ -72,25 +72,13 @@ void World::initSprite(Sprite s, int w, int h)
 void World::drawStripe(int x, float dist, Sprite texture, int col)
 {
     const int h = static_cast<int>(SCREEN_HEIGHT / dist);
-
-#if 0
-    if (currentLoadedSprite != texture)
-    {
-        // need to set it for every handle (texture), cache to save some GD gfx list memory
-        GD.BitmapHandle(texture);
-        GD.BitmapSize(NEAREST, BORDER, BORDER, /*WALL0_WIDTH*2*/2, SCREEN_HEIGHT*2);
-        currentLoadedSprite = texture;
-    }
-#endif
+    const int y = (SCREEN_HEIGHT / 2) - (h / 2);
+    const Real sh = (Real)h / TEXTURE_SIZE;
 
     initSprite(texture, 2, SCREEN_HEIGHT*2);
 
-    const int y = (SCREEN_HEIGHT / 2) - (h / 2);
-    
-    const Real sh = (Real)h / TEXTURE_SIZE;
-    
     GD.cmd_loadidentity();
-    GD.cmd_translate(F16(-col*2), F16(y*2)); // need to translate: normally images drawn at y<0 are simply discarded completely
+    GD.cmd_translate(F16(-col*2), F16(y*2));
     GD.cmd_scale(F16(2.0), F16(sh*2));
     GD.cmd_setmatrix();
     
@@ -279,9 +267,6 @@ void World::drawEntities()
 
             GD.StencilFunc(GREATER, stencilFromDist(dist), 255);
 
-            /*GD.BitmapHandle(SOLDIER_HANDLE);
-            GD.BitmapSize(NEAREST, BORDER, BORDER, sw*2, (SCREEN_HEIGHT - sxt) * 2);*/
-
             GD.Vertex2f(sxl*2 * 16, sxt*2 * 16);
         }
     }
@@ -346,32 +331,8 @@ void World::setup()
 {
     const uint32_t begintime = millis();
 
-#if 0
-    for (int i=0; i<8; ++i)
-    {
-        GD.BitmapHandle(i);
-        GD.BitmapSource(i * WALL0_ASSETS_END);
-//        GD.BitmapSize(NEAREST, BORDER, BORDER, WALL0_IMG_WIDTH, WALL0_IMG_HEIGHT);
-        GD.BitmapLayout(RGB565, WALL0_IMG_WIDTH * 2, WALL0_IMG_HEIGHT);
-        GD.cmd_inflate(i * WALL0_ASSETS_END);
-        char fname[20];
-        sprintf(fname, "wall%d.gd2", i);
-        GD.safeload(fname);
-    }
-
-    GD.BitmapHandle(8);
-    GD.BitmapSource(8 * WALL0_ASSETS_END);
-//        GD.BitmapSize(NEAREST, BORDER, BORDER, WALL0_IMG_WIDTH, WALL0_IMG_HEIGHT);
-    GD.BitmapLayout(ARGB1555, SOLDIER0_IMG_WIDTH * 2, SOLDIER0_IMG_HEIGHT);
-    GD.cmd_inflate(8 * WALL0_ASSETS_END);
-    GD.safeload("soldier0.gd2");
-#endif
-
     for (int i=0; i<SPRITE_END; ++i)
     {
-//        GD.BitmapHandle(i);
-        GD.BitmapSource(i * WALL0_ASSETS_END);
-        GD.BitmapLayout(sprites[i].fmt, sprites[i].width * 2, sprites[i].height);
         GD.cmd_inflate(i * SPRITE_BLOCK);
         GD.safeload(sprites[i].file);
     }
@@ -389,7 +350,6 @@ void World::update()
         dirty = false;
     }
 }
-
 
 
 void setup()
