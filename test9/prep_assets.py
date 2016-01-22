@@ -70,6 +70,8 @@ class BaseAsset(gd2.prep.AssetBin):
         # disable this: we want to dynamically set the ptr for cmd_inflate
 #        self.cmd_inflate(0)
         calldata = zlib.compress(self.alldata)
+        self.defines.append((self.prefix + "ASSETS_COMPR_END", ul(len(calldata))))
+
         print 'Assets report'
         print '-------------'
         print 'Header file:    %s' % self.header
@@ -134,11 +136,11 @@ struct SpriteInfo
     const char *file;
     int width, height;
     int fmt;
-    uint32_t size;
+    uint32_t size, comprsize;
 };"""
 
         print >>gfxheader, ("\nconst SpriteInfo sprites[SPRITE_END]\n{")
         for e in gfxEntries:
-            print >>gfxheader, ("    {{ \"{0}.gd2\", {1}_IMG_WIDTH, {1}_IMG_HEIGHT, {2}, {1}_ASSETS_END }},").format(e["name"], e["name"].upper(), e["fmt"])
+            print >>gfxheader, ("    {{ \"{0}.gd2\", {1}_IMG_WIDTH, {1}_IMG_HEIGHT, {2}, {1}_ASSETS_END, {1}_ASSETS_COMPR_END }},").format(e["name"], e["name"].upper(), e["fmt"])
         print >>gfxheader, "};"
 

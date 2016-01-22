@@ -1,7 +1,13 @@
 #include <EEPROM.h>
 #include <SPI.h>
+#include <SPIFIFO.h>
 #include <GD2.h>
 
+#include <virtmem.h>
+#include <alloc/spiram_alloc.h>
+#include <serialram.h>
+
+#include "utils.h"
 #include "world.h"
 
 namespace {
@@ -46,8 +52,8 @@ World::World()
     player.setAngle(0.5);
     player.setPos(1.5, 1.5);
 
-    addStaticEntity(Vec2D(2.5, 3.5), Entity::FLAG_ENABLED);
-    addStaticEntity(Vec2D(3.5, 3.5), Entity::FLAG_ENABLED);
+    addStaticEntity(Vec2D(2.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER0);
+    addStaticEntity(Vec2D(3.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER0);
 }
 
 void World::initSprite(Sprite s, int w, int h)
@@ -201,6 +207,27 @@ void World::rayCast()
 
 void World::loadSprites()
 {
+    // check for entities (world already has been checked during raycasting)
+    for (uint8_t e=0; e<entityCount; ++e)
+    {
+        const int mapx = static_cast<int>(entities[e]->getPos().x);
+        const int mapy = static_cast<int>(entities[e]->getPos().y);
+
+        // make sure cell is visible
+        if (!visibleCells[mapy][mapx])
+            continue;
+
+        const Sprite s = entities[e]->getSprite();
+
+        spriteGfxInfo[s].lastRayFrameNumber = rayFrameNumber; // mark it visible during this frame
+        if (spriteGfxInfo[s].gfxIndex == SPRITE_NOT_LOADED) // not yet loaded into GD2 memory?
+        {
+            spriteGfxInfo[s].gfxIndex = SPRITE_SHOULD_LOAD; // make sure to only add it once
+            spritesToLoad[spritesToLoadCount] = s;
+            ++spritesToLoadCount;
+        }
+    }
+
     // load new sprites into GD2 and replace old ones if possible
     if (spritesToLoadCount)
     {
@@ -222,16 +249,44 @@ void World::loadSprites()
             if (loadedSprites[lastGfxIndex] != SPRITE_NONE)
                 spriteGfxInfo[loadedSprites[lastGfxIndex]].gfxIndex = -1; // mark as not loaded
 
-            spriteGfxInfo[spritesToLoad[s]].gfxIndex = lastGfxIndex;
-            spriteGfxInfo[spritesToLoad[s]].lastRayFrameNumber = rayFrameNumber;
+            const int spr = static_cast<int>(spritesToLoad[s]);
+            spriteGfxInfo[spr].gfxIndex = lastGfxIndex;
+            spriteGfxInfo[spr].lastRayFrameNumber = rayFrameNumber;
             loadedSprites[lastGfxIndex] = spritesToLoad[s];
 
             // load actual sprite
-            // UNDONE
-//            Serial.print("LOAD: "); Serial.print(sprites[spritesToLoad[s]]);
-//            Serial.print(" @ "); Serial.println(lastGfxIndex);
             Serial.printf("LOAD: %s @ %d\n", sprites[spritesToLoad[s]].file, lastGfxIndex);
+#if 0
+            const uint32_t begintime = millis();
+            GD.cmd_inflate(spr * SPRITE_BLOCK);
+//            GD.safeload(sprites[spr].file);
+            if (!loadGDFile(sprites[spr].file))
+                GD.alert("Failed to load resource!");
+            Serial.printf("load time: %d\n", millis() - begintime);
+#else
+            const uint32_t begintime = millis();
+            GD.cmd_inflate(spr * SPRITE_BLOCK);
+            GD.__end();
 
+            uint32_t cachesize = sprites[spr].comprsize;
+            CachedSprite cp = cachedSprites[spr];
+            while (cachesize)
+            {
+                VPtrLock<CachedSprite> lock = makeVirtPtrLock(cp, cachesize, true);
+                const uint32_t lockedsize = lock.getLockSize();
+
+                GD.resume();
+                GD.copyram(*lock, lockedsize);
+                GD.__end();
+
+                cachesize -= lockedsize;
+                cp += lockedsize;
+            }
+
+            GD.resume();
+            Serial.printf("load time: %d\n", millis() - begintime);
+
+#endif
             ++lastGfxIndex; // no need to check for this (and previous) index again
         }
 
@@ -311,8 +366,8 @@ void World::drawEntities()
         const Real scalef = size / TEXTURE_SIZE;
 
         const int sx = tan(sangle) * SCREEN_HEIGHT;
-        int sw = scalef * SOLDIER0_IMG_WIDTH;
-        const int sh = scalef * SOLDIER0_IMG_HEIGHT;
+        int sw = scalef * sprites[entities[e]->getSprite()].width;
+        const int sh = scalef * sprites[entities[e]->getSprite()].height;
         const int sxl = SCREEN_WIDTH/2 - sx - (sw/2);
         const int sxt = (SCREEN_HEIGHT - sh) / 2;
 
@@ -322,7 +377,7 @@ void World::drawEntities()
             if ((sxl + sw) > SCREEN_WIDTH)
                 sw = SCREEN_WIDTH - sxl;
 
-            initSprite(SPRITE_SOLDIER0, sw*2, (SCREEN_HEIGHT - sxt) * 2);
+            initSprite(entities[e]->getSprite(), sw*2, (SCREEN_HEIGHT - sxt) * 2);
 
             GD.cmd_loadidentity();
             GD.cmd_scale(F16(scalef*2), F16(scalef*2));
@@ -381,10 +436,11 @@ void World::handleInput()
     }
 }
 
-void World::addStaticEntity(const Vec2D &pos, Entity::Flags flags)
+void World::addStaticEntity(const Vec2D &pos, Entity::Flags flags, Sprite sprite)
 {
     staticEntityStore[staticEntityCount].setPos(pos);
     staticEntityStore[staticEntityCount].setFlags(flags);
+    staticEntityStore[staticEntityCount].setSprite(sprite);
 
     entities[entityCount] = &staticEntityStore[staticEntityCount];
 
@@ -394,6 +450,7 @@ void World::addStaticEntity(const Vec2D &pos, Entity::Flags flags)
 
 void World::setup()
 {
+#if 0
     const uint32_t begintime = millis();
 
     for (int i=0; i<SPRITE_END; ++i)
@@ -403,6 +460,26 @@ void World::setup()
     }
 
     Serial.printf("load time: %d\n", millis() - begintime);
+#endif
+
+    GD.__end();
+
+    valloc.setSettings(true, 10, SerialRam::SPEED_FULL);
+    valloc.setPoolSize(128 * 1024);
+    valloc.start();
+
+    const uint32_t begintime2 = millis();
+
+    for (int i=0; i<SPRITE_END; ++i)
+    {
+        cachedSprites[i] = valloc.alloc<uint8_t>(sprites[i].comprsize);
+        loadGDFileInVMem(sprites[i].file, cachedSprites[i]);
+    }
+
+    Serial.printf("load time2: %d\n", millis() - begintime2);
+
+    SPIFIFO.begin(6, SPI_CLOCK_24MHz);
+    GD.resume();
 }
 
 void World::update()
@@ -419,6 +496,12 @@ void World::update()
 
 void setup()
 {
+    pinMode(6, OUTPUT); digitalWrite(6, HIGH);
+    pinMode(7, OUTPUT); digitalWrite(7, HIGH);
+    pinMode(8, OUTPUT); digitalWrite(8, HIGH);
+    pinMode(9, OUTPUT); digitalWrite(9, HIGH);
+    pinMode(10, OUTPUT); digitalWrite(10, HIGH);
+
     GD.begin();
     Serial.begin(115200);
     world.setup();

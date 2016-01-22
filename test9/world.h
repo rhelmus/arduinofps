@@ -4,7 +4,12 @@
 #include <math.h>
 #include <stdint.h>
 
+#include <virtmem.h>
+#include <alloc/spiram_alloc.h>
+
 #include "gfx.h"
+
+using namespace virtmem;
 
 enum
 {
@@ -59,10 +64,13 @@ public:
 
 private:
     Flags flags = FLAG_NONE;
+    Sprite sprite = SPRITE_NONE;
 
 public:
     void setFlags(Flags t) { flags = t; }
     Flags getFlags(void) const { return flags; }
+    void setSprite(Sprite s) { sprite = s; }
+    Sprite getSprite(void) const { return sprite; }
 };
 
 class Player : public Object
@@ -96,6 +104,10 @@ class World
         uint32_t lastRayFrameNumber = 0;
     };
 
+    typedef VPtr<uint8_t, SPIRAMVAlloc> CachedSprite;
+
+    SPIRAMVAlloc valloc;
+
     Player player;
     Entity staticEntityStore[MAX_STATIC_ENTITIES];
     Enemy enemyStore[MAX_ENEMIES];
@@ -104,6 +116,7 @@ class World
     uint8_t enemyCount = 0;
     uint8_t entityCount = 0;
 
+    CachedSprite cachedSprites[SPRITE_END];
     Sprite currentLoadedSprite = SPRITE_NONE;
     int currentLoadedSpriteW = -1, currentLoadedSpriteH = -1;
     uint32_t rayFrameNumber = 0;
@@ -127,7 +140,7 @@ class World
     void render(void);
     void handleInput(void);
 
-    void addStaticEntity(const Vec2D &pos, Entity::Flags flags);
+    void addStaticEntity(const Vec2D &pos, Entity::Flags flags, Sprite sprite);
 
 public:
     World(void);
