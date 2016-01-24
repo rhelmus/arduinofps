@@ -53,7 +53,7 @@ World::World()
     player.setPos(1.5, 1.5);
 
     addStaticEntity(Vec2D(2.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER0);
-    addStaticEntity(Vec2D(3.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER0);
+//    addStaticEntity(Vec2D(3.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER0);
 }
 
 void World::initSprite(Sprite s, int w, int h)
@@ -386,6 +386,25 @@ void World::drawEntities()
             GD.StencilFunc(GREATER, stencilFromDist(dist), 255);
 
             GD.Vertex2f(sxl*2 * 16, sxt*2 * 16);
+
+            Real sangle1 = (sangle * 180 / M_PI);
+            while (sangle1 > 360) sangle1 -= 360;
+            while (sangle1 < 0) sangle1 += 360;
+            Real sangle2 = ((player.getAngle() * 180 / M_PI) + (SCREEN_WIDTH/2 - sxl)/8) - 180;
+            while (sangle2 > 360) sangle2 -= 360;
+            while (sangle2 < 0) sangle2 += 360;
+            Real sangle3 = (atan2(dy, dx) * 180 / M_PI);
+            while (sangle3 > 360) sangle3 -= 360;
+            while (sangle3 < 0) sangle3 += 360;
+            Real sangle4 = (/*enemy angle -*/0 - M_PI - player.getAngle() - sangle) * 180 / M_PI;
+            while (sangle4 > 360) sangle4 -= 360;
+            while (sangle4 < 0) sangle4 += 360;
+
+            Serial.printf("pa: %f\n", player.getAngle() * 180 / M_PI);
+            Serial.printf("s1[%d]: %f\n", (int)e, sangle1);
+            Serial.printf("s2[%d]: %f\n", (int)e, sangle2);
+            Serial.printf("s3[%d]: %f\n", (int)e, sangle3);
+            Serial.printf("s4[%d]: %f\n", (int)e, sangle4);
         }
     }
 }
