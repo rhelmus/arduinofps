@@ -7,27 +7,10 @@
 #include <virtmem.h>
 #include <alloc/spiram_alloc.h>
 
+#include "defs.h"
 #include "gfx.h"
 
 using namespace virtmem;
-
-enum
-{
-    SCREEN_WIDTH = 200,
-    SCREEN_HEIGHT = 100,
-    WORLD_SIZE = 8,
-    WORLD_MAX_LENGTH = static_cast<int>(sqrt(WORLD_SIZE*WORLD_SIZE + WORLD_SIZE*WORLD_SIZE) + 0.5),
-    TEXTURE_SIZE = 64,
-    TEXTURE_COUNT = 8,
-    MAX_STATIC_ENTITIES = 128,
-    MAX_ENEMIES = 128,
-    SPRITE_BLOCK = 8192UL,
-    MAX_LOADED_SPRITES = 28,
-    SPRITE_NOT_LOADED = -1,
-    SPRITE_SHOULD_LOAD = -2,
-};
-
-typedef float Real;
 
 struct Vec2D
 {
@@ -44,6 +27,7 @@ struct Vec2D
 class Object
 {
     Vec2D pos;
+    Real angle = 0.0;
 
 public:
     Object(void) : pos(Vec2D(0.0, 0.0)) { }
@@ -51,6 +35,8 @@ public:
     void setPos(const Vec2D &v) { pos = v; }
     void setPos(Real x, Real y) { pos.x = x; pos.y = y; }
     Vec2D getPos(void) const { return pos; }
+    void setAngle(Real a) { angle = a; }
+    Real getAngle(void) const { return angle; }
 };
 
 class Entity : public Object
@@ -60,28 +46,27 @@ public:
     {
         FLAG_NONE = 1<<0,
         FLAG_ENABLED = 1<<1,
+        FLAG_ROTATIONAL_SPRITE = 1<<2,
+        FLAG_VSIBILE = 1<<3, // set automatically when visible
     };
 
 private:
-    Flags flags = FLAG_NONE;
+    int flags = FLAG_NONE;
     Sprite sprite = SPRITE_NONE;
 
 public:
-    void setFlags(Flags t) { flags = t; }
-    Flags getFlags(void) const { return flags; }
+    void setFlags(int f) { flags = f; }
+    void setFlag(Flags f) { flags |= f; }
+    void unsetFlag(Flags f) { flags &= ~f; }
+    int getFlags(void) const { return flags; }
     void setSprite(Sprite s) { sprite = s; }
     Sprite getSprite(void) const { return sprite; }
 };
 
 class Player : public Object
 {
-    Real angle = 0.0;
-
 public:
     Player(void) { }
-
-    void setAngle(Real a) { angle = a; }
-    Real getAngle(void) const { return angle; }
 };
 
 class Enemy : public Entity
@@ -96,6 +81,12 @@ class World
         Sprite texture;
         uint8_t texColumn;
         bool dark;
+    };
+
+    struct EntityDrawInfo
+    {
+        int16_t spriteX, spriteY, spriteW;
+        Real dist, scaleF;
     };
 
     struct SpriteGfxInfo
@@ -121,18 +112,21 @@ class World
     int currentLoadedSpriteW = -1, currentLoadedSpriteH = -1;
     uint32_t rayFrameNumber = 0;
     SpriteGfxInfo spriteGfxInfo[SPRITE_END];
-    Sprite loadedSprites[MAX_LOADED_SPRITES];
+    Sprite loadedGDSprites[MAX_LOADED_SPRITES];
+    uint8_t freeGDSpriteIndex = 0;
     bool dirty = true;
 
     // filled during every ray cast session
     bool visibleCells[WORLD_SIZE][WORLD_SIZE];
     RayInfo rayCastInfo[SCREEN_WIDTH];
+    EntityDrawInfo entityDrawInfo[MAX_STATIC_ENTITIES + MAX_ENEMIES];
     Sprite spritesToLoad[MAX_LOADED_SPRITES];
     uint8_t spritesToLoadCount = 0;
 
     void initSprite(Sprite s, int w=-1, int h=-1);
     void drawStripe(int x, float dist, Sprite texture, int col);
     void rayCast(void);
+    void castEntities(void);
     void loadSprites(void);
     void preRender(void);
     void drawWorld(void);

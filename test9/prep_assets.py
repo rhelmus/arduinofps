@@ -38,7 +38,14 @@ gfxEntries = [
         wall("WAL00028.png", "wall6"),
         wall("WAL00034.png", "wall7"),
 
-        entity("SPR00050.png", "soldier0"),
+        entity("SPR00050.png", "sol00"),
+        entity("SPR00051.png", "sol01"),
+        entity("SPR00052.png", "sol02"),
+        entity("SPR00053.png", "sol03"),
+        entity("SPR00054.png", "sol04"),
+        entity("SPR00055.png", "sol05"),
+        entity("SPR00056.png", "sol06"),
+        entity("SPR00057.png", "sol07"),
     ]
 
 class BaseAsset(gd2.prep.AssetBin):

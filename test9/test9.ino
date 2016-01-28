@@ -47,13 +47,14 @@ World world;
 
 World::World()
 {
-    memset(loadedSprites, SPRITE_NONE, sizeof(loadedSprites));
+    memset(loadedGDSprites, SPRITE_NONE, sizeof(loadedGDSprites));
 
     player.setAngle(0.5);
     player.setPos(1.5, 1.5);
 
-    addStaticEntity(Vec2D(2.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER0);
+    addStaticEntity(Vec2D(2.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOL00);
 //    addStaticEntity(Vec2D(3.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER0);
+    staticEntityStore[0].setFlag(Entity::FLAG_ROTATIONAL_SPRITE);
 }
 
 void World::initSprite(Sprite s, int w, int h)
@@ -205,11 +206,12 @@ void World::rayCast()
     }
 }
 
-void World::loadSprites()
+void World::castEntities()
 {
-    // check for entities (world already has been checked during raycasting)
     for (uint8_t e=0; e<entityCount; ++e)
     {
+        entities[e]->unsetFlag(Entity::FLAG_VSIBILE); // until known otherwise
+
         const int mapx = static_cast<int>(entities[e]->getPos().x);
         const int mapy = static_cast<int>(entities[e]->getPos().y);
 
@@ -217,17 +219,50 @@ void World::loadSprites()
         if (!visibleCells[mapy][mapx])
             continue;
 
-        const Sprite s = entities[e]->getSprite();
+        const Real dx = entities[e]->getPos().x - player.getPos().x;
+        const Real dy = entities[e]->getPos().y - player.getPos().y;
+        const Real dist = sqrt(dx*dx + dy*dy); // sqrt needed?
+        const Real sangle = atan2(dy, dx) - player.getAngle();
+        const Real size = SCREEN_HEIGHT / (cos(sangle) * dist);
+        const Real scalef = size / TEXTURE_SIZE;
 
-        spriteGfxInfo[s].lastRayFrameNumber = rayFrameNumber; // mark it visible during this frame
-        if (spriteGfxInfo[s].gfxIndex == SPRITE_NOT_LOADED) // not yet loaded into GD2 memory?
+        const int sx = tan(sangle) * SCREEN_HEIGHT;
+        int sw = scalef * sprites[entities[e]->getSprite()].width;
+        const int sh = scalef * sprites[entities[e]->getSprite()].height;
+        const int sxl = SCREEN_WIDTH/2 - sx - (sw/2);
+        const int sxt = (SCREEN_HEIGHT - sh) / 2;
+
+        // is the sprite at least partially visible?
+        if (sxl < SCREEN_WIDTH && (sxl + sw) >= 0)
         {
-            spriteGfxInfo[s].gfxIndex = SPRITE_SHOULD_LOAD; // make sure to only add it once
-            spritesToLoad[spritesToLoadCount] = s;
-            ++spritesToLoadCount;
-        }
-    }
+            if ((sxl + sw) > SCREEN_WIDTH)
+                sw = SCREEN_WIDTH - sxl;
 
+            entities[e]->setFlag(Entity::FLAG_VSIBILE);
+
+            int s = entities[e]->getSprite();
+            if (entities[e]->getFlags() & Entity::FLAG_ROTATIONAL_SPRITE)
+                s += (Sprite)getEntityDrawRotation(player.getAngle(), entities[e]->getAngle(), sxl);
+
+            spriteGfxInfo[s].lastRayFrameNumber = rayFrameNumber; // mark it visible during this frame
+            if (spriteGfxInfo[s].gfxIndex == SPRITE_NOT_LOADED) // not yet loaded into GD2 memory?
+            {
+                spriteGfxInfo[s].gfxIndex = SPRITE_SHOULD_LOAD; // make sure to only add it once
+                spritesToLoad[spritesToLoadCount] = static_cast<Sprite>(s);
+                ++spritesToLoadCount;
+            }
+        }
+
+        entityDrawInfo[e].spriteX = sxl;
+        entityDrawInfo[e].spriteY = sxt;
+        entityDrawInfo[e].spriteW = sw;
+        entityDrawInfo[e].dist = dist;
+        entityDrawInfo[e].scaleF = scalef;
+    }
+}
+
+void World::loadSprites()
+{
     // load new sprites into GD2 and replace old ones if possible
     if (spritesToLoadCount)
     {
@@ -238,24 +273,36 @@ void World::loadSprites()
             spritesToLoadCount = MAX_LOADED_SPRITES;
         }
 
-        int lastGfxIndex = 0;
+        int replaceind = 0;
         for (int s=0; s<spritesToLoadCount; ++s)
         {
-            // find a free slot: only sprites that need be available have a current frame number
-            while (loadedSprites[lastGfxIndex] != SPRITE_NONE &&
-                   spriteGfxInfo[loadedSprites[lastGfxIndex]].lastRayFrameNumber == rayFrameNumber)
-                ++lastGfxIndex;
+            int gdind;
 
-            if (loadedSprites[lastGfxIndex] != SPRITE_NONE)
-                spriteGfxInfo[loadedSprites[lastGfxIndex]].gfxIndex = -1; // mark as not loaded
+            if (freeGDSpriteIndex != MAX_LOADED_SPRITES)
+            {
+                gdind = freeGDSpriteIndex;
+                ++freeGDSpriteIndex;
+            }
+            else
+            {
+                // find a free slot: only sprites that need be available have a current frame number
+                while (loadedGDSprites[replaceind] != SPRITE_NONE &&
+                       spriteGfxInfo[loadedGDSprites[replaceind]].lastRayFrameNumber == rayFrameNumber)
+                    ++replaceind;
+                gdind = replaceind;
+                ++replaceind; // no need to check for this (and previous) index again
+            }
+
+            if (loadedGDSprites[gdind] != SPRITE_NONE)
+                spriteGfxInfo[loadedGDSprites[gdind]].gfxIndex = -1; // mark as not loaded
 
             const int spr = static_cast<int>(spritesToLoad[s]);
-            spriteGfxInfo[spr].gfxIndex = lastGfxIndex;
+            spriteGfxInfo[spr].gfxIndex = gdind;
             spriteGfxInfo[spr].lastRayFrameNumber = rayFrameNumber;
-            loadedSprites[lastGfxIndex] = spritesToLoad[s];
+            loadedGDSprites[gdind] = spritesToLoad[s];
 
             // load actual sprite
-            Serial.printf("LOAD: %s @ %d\n", sprites[spritesToLoad[s]].file, lastGfxIndex);
+            Serial.printf("LOAD: %s @ %d\n", sprites[spritesToLoad[s]].file, gdind);
 #if 0
             const uint32_t begintime = millis();
             GD.cmd_inflate(spr * SPRITE_BLOCK);
@@ -287,7 +334,6 @@ void World::loadSprites()
             Serial.printf("load time: %d\n", millis() - begintime);
 
 #endif
-            ++lastGfxIndex; // no need to check for this (and previous) index again
         }
 
         spritesToLoadCount = 0;
@@ -351,61 +397,23 @@ void World::drawEntities()
 
     for (uint8_t e=0; e<entityCount; ++e)
     {
-        const int mapx = static_cast<int>(entities[e]->getPos().x);
-        const int mapy = static_cast<int>(entities[e]->getPos().y);
-
-        // make sure cell is visible
-        if (!visibleCells[mapy][mapx])
+        if (!(entities[e]->getFlags() & Entity::FLAG_VSIBILE))
             continue;
 
-        const Real dx = entities[e]->getPos().x - player.getPos().x;
-        const Real dy = entities[e]->getPos().y - player.getPos().y;
-        const Real dist = sqrt(dx*dx + dy*dy); // sqrt needed?
-        const Real sangle = atan2(dy, dx) - player.getAngle();
-        const Real size = SCREEN_HEIGHT / (cos(sangle) * dist);
-        const Real scalef = size / TEXTURE_SIZE;
+        int s = entities[e]->getSprite();
+        if (entities[e]->getFlags() & Entity::FLAG_ROTATIONAL_SPRITE)
+            s += getEntityDrawRotation(player.getAngle(), entities[e]->getAngle(),
+                                       entityDrawInfo[e].spriteX);
 
-        const int sx = tan(sangle) * SCREEN_HEIGHT;
-        int sw = scalef * sprites[entities[e]->getSprite()].width;
-        const int sh = scalef * sprites[entities[e]->getSprite()].height;
-        const int sxl = SCREEN_WIDTH/2 - sx - (sw/2);
-        const int sxt = (SCREEN_HEIGHT - sh) / 2;
+        initSprite(static_cast<Sprite>(s), entityDrawInfo[e].spriteW*2, (SCREEN_HEIGHT - entityDrawInfo[e].spriteY) * 2);
 
-        // is the sprite at least partially visible?
-        if (sxl < SCREEN_WIDTH && (sxl + sw) >= 0)
-        {
-            if ((sxl + sw) > SCREEN_WIDTH)
-                sw = SCREEN_WIDTH - sxl;
+        GD.cmd_loadidentity();
+        GD.cmd_scale(F16(entityDrawInfo[e].scaleF*2), F16(entityDrawInfo[e].scaleF*2));
+        GD.cmd_setmatrix();
 
-            initSprite(entities[e]->getSprite(), sw*2, (SCREEN_HEIGHT - sxt) * 2);
+        GD.StencilFunc(GREATER, stencilFromDist(entityDrawInfo[e].dist), 255);
 
-            GD.cmd_loadidentity();
-            GD.cmd_scale(F16(scalef*2), F16(scalef*2));
-            GD.cmd_setmatrix();
-
-            GD.StencilFunc(GREATER, stencilFromDist(dist), 255);
-
-            GD.Vertex2f(sxl*2 * 16, sxt*2 * 16);
-
-            Real sangle1 = (sangle * 180 / M_PI);
-            while (sangle1 > 360) sangle1 -= 360;
-            while (sangle1 < 0) sangle1 += 360;
-            Real sangle2 = ((player.getAngle() * 180 / M_PI) + (SCREEN_WIDTH/2 - sxl)/8) - 180;
-            while (sangle2 > 360) sangle2 -= 360;
-            while (sangle2 < 0) sangle2 += 360;
-            Real sangle3 = (atan2(dy, dx) * 180 / M_PI);
-            while (sangle3 > 360) sangle3 -= 360;
-            while (sangle3 < 0) sangle3 += 360;
-            Real sangle4 = (/*enemy angle -*/0 - M_PI - player.getAngle() - sangle) * 180 / M_PI;
-            while (sangle4 > 360) sangle4 -= 360;
-            while (sangle4 < 0) sangle4 += 360;
-
-            Serial.printf("pa: %f\n", player.getAngle() * 180 / M_PI);
-            Serial.printf("s1[%d]: %f\n", (int)e, sangle1);
-            Serial.printf("s2[%d]: %f\n", (int)e, sangle2);
-            Serial.printf("s3[%d]: %f\n", (int)e, sangle3);
-            Serial.printf("s4[%d]: %f\n", (int)e, sangle4);
-        }
+        GD.Vertex2f(entityDrawInfo[e].spriteX*2 * 16, entityDrawInfo[e].spriteY*2 * 16);
     }
 }
 
@@ -414,6 +422,7 @@ void World::render()
     const uint32_t begintime = millis();
 
     rayCast();
+    castEntities();
     loadSprites();
     preRender();
     drawWorld();

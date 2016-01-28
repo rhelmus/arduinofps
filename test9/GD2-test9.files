@@ -3,3 +3,4 @@ world.h
 prep_assets.py
 utils.cpp
 utils.h
+defs.h
