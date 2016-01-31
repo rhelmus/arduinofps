@@ -1,6 +1,7 @@
 #include <SPI.h>
 #include <GD2.h>
 #include <transports/wiring.h>
+#include <SdFat.h>
 
 #include "utils.h"
 
@@ -35,6 +36,7 @@ bool loadGDFile(const char *filename)
     return 0;
 }
 
+#if 0
 bool loadGDFileInVMem(const char *filename, VPtr<uint8_t, SPIRAMVAlloc> ptr)
 {
     const uint32_t bufsize = 512; // fixed size by GD FAT lib
@@ -60,6 +62,36 @@ bool loadGDFileInVMem(const char *filename, VPtr<uint8_t, SPIRAMVAlloc> ptr)
     GD.resume();
     return 0;
 }
+#else
+bool loadGDFileInVMem(const char *filename, VPtr<uint8_t, SPIRAMVAlloc> ptr)
+{
+    GD.__end();
+
+    SdFile sdf;
+    bool ret = false;
+
+    if (sdf.open(filename, O_READ))
+    {
+        ret = true;
+        uint32_t size = sdf.fileSize();
+
+        while (size)
+        {
+            VPtrLock<VPtr<uint8_t, SPIRAMVAlloc>> lock = makeVirtPtrLock(ptr, size, false);
+            const uint32_t lockedsize = lock.getLockSize();
+//            Serial.printf("%s: lockedsize: %d\n", filename, (int)lockedsize);
+            sdf.read(*lock, lockedsize);
+            size -= lockedsize;
+            ptr += lockedsize;
+        }
+
+        sdf.close();
+    }
+
+    GD.resume();
+    return ret;
+}
+#endif
 
 uint8_t getEntityDrawRotation(Real plang, Real enang, int16_t ex)
 {
@@ -70,7 +102,6 @@ uint8_t getEntityDrawRotation(Real plang, Real enang, int16_t ex)
     while (sangle > 360) sangle -= 360;
     while (sangle < 0) sangle += 360;
 
-    Serial.printf("rot: %d\n", (int)(sangle / (360 / 8)));
-//    return 0; // UNDONE
+//    Serial.printf("rot: %d\n", (int)(sangle / (360 / 8)));
     return sangle / (360 / 8);
 }

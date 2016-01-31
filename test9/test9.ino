@@ -2,7 +2,7 @@
 #include <SPI.h>
 #include <SPIFIFO.h>
 #include <GD2.h>
-
+#include <SdFat.h>
 #include <virtmem.h>
 #include <alloc/spiram_alloc.h>
 #include <serialram.h>
@@ -24,6 +24,17 @@ const int worldMap[WORLD_SIZE][WORLD_SIZE] = {
 };
 
 /*const int worldMap[WORLD_SIZE][WORLD_SIZE] = {
+    { 1, 1, 1, 1, 1, 1, 1, 1 },
+    { 1, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 1, 0, 0, 1 },
+    { 1, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 1, 1, 1, 1, 1, 1, 1 },
+};*/
+
+/*const int worldMap[WORLD_SIZE][WORLD_SIZE] = {
     { 1, 4, 1, 1, 6, 1, 1, 1 },
     { 2, 0, 0, 5, 0, 0, 0, 7 },
     { 1, 1, 0, 1, 0, 1, 1, 1 },
@@ -40,6 +51,7 @@ inline int stencilFromDist(float dist)
     return min(static_cast<int>(dist * 255.0 / WORLD_MAX_LENGTH + 0.5), 255);
 }
 
+SdFat sd;
 World world;
 
 }
@@ -52,8 +64,8 @@ World::World()
     player.setAngle(0.5);
     player.setPos(1.5, 1.5);
 
-    addStaticEntity(Vec2D(2.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOL00);
-//    addStaticEntity(Vec2D(3.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER0);
+    addStaticEntity(Vec2D(2.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER00);
+    addStaticEntity(Vec2D(3.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER00);
     staticEntityStore[0].setFlag(Entity::FLAG_ROTATIONAL_SPRITE);
 }
 
@@ -491,6 +503,11 @@ void World::setup()
 #endif
 
     GD.__end();
+//    SPI.endTransaction();
+
+    Serial.println("Init SD");
+    if (!sd.begin(9, SPI_FULL_SPEED))
+        sd.initErrorHalt();
 
     valloc.setSettings(true, 10, SerialRam::SPEED_FULL);
     valloc.setPoolSize(128 * 1024);
@@ -506,7 +523,9 @@ void World::setup()
 
     Serial.printf("load time2: %d\n", millis() - begintime2);
 
+//    SPI.endTransaction();
     SPIFIFO.begin(6, SPI_CLOCK_24MHz);
+//    SPI.beginTransaction(SPISettings(/*3000000*/20000000, MSBFIRST, SPI_MODE0));
     GD.resume();
 }
 
@@ -530,8 +549,14 @@ void setup()
     pinMode(9, OUTPUT); digitalWrite(9, HIGH);
     pinMode(10, OUTPUT); digitalWrite(10, HIGH);
 
-    GD.begin();
+    delay(2000);
+
     Serial.begin(115200);
+
+    Serial.println("Init GD");
+    GD.begin(~GD_STORAGE); // use SD fat lib instead of GD2 SD library
+
+    Serial.println("Init world");
     world.setup();
 }
 
