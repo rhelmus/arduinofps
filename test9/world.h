@@ -71,6 +71,8 @@ public:
 
 class Enemy : public Entity
 {
+public:
+    void think(void);
 };
 
 class World
@@ -133,14 +135,22 @@ class World
     void drawEntities(void);
     void render(void);
     void handleInput(void);
-
+    bool isBlocking(int x, int y) const;
+    Vec2D checkCollision(const Vec2D &from, const Vec2D &to, Real radius) const;
     void addStaticEntity(const Vec2D &pos, Entity::Flags flags, Sprite sprite);
+    void addEnemy(const Vec2D &pos, Sprite sprite);
 
 public:
     World(void);
 
     void setup(void);
     void update(void);
+
+    const Player &getPlayer(void) const { return player; }
+    void move(Object *obj, Real speed);
+    void markDirty(void) { dirty = true; }
 };
+
+extern World world;
 
 #endif // RAYCAST_H

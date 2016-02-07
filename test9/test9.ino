@@ -52,10 +52,10 @@ inline int stencilFromDist(float dist)
 }
 
 SdFat sd;
-World world;
 
 }
 
+World world;
 
 World::World()
 {
@@ -64,9 +64,10 @@ World::World()
     player.setAngle(0.5);
     player.setPos(1.5, 1.5);
 
-    addStaticEntity(Vec2D(2.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER00);
+//    addStaticEntity(Vec2D(2.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER00);
+    addEnemy(Vec2D(2.5, 3.5), SPRITE_SOLDIER00);
     addStaticEntity(Vec2D(3.5, 3.5), Entity::FLAG_ENABLED, SPRITE_SOLDIER00);
-    staticEntityStore[0].setFlag(Entity::FLAG_ROTATIONAL_SPRITE);
+//    staticEntityStore[0].setFlag(Entity::FLAG_ROTATIONAL_SPRITE);
 }
 
 void World::initSprite(Sprite s, int w, int h)
@@ -114,12 +115,12 @@ void World::rayCast()
     ++rayFrameNumber;
 
     // cast all rays here
-    Real sina = sin(player.getAngle());
-    Real cosa = cos(player.getAngle());
+    const Real sina = sin(player.getAngle());
+    const Real cosa = cos(player.getAngle());
     Real u = cosa - sina;
     Real v = sina + cosa;
-    Real du = 2 * sina / SCREEN_WIDTH;
-    Real dv = -2 * cosa / SCREEN_WIDTH;
+    const Real du = 2 * sina / SCREEN_WIDTH;
+    const Real dv = -2 * cosa / SCREEN_WIDTH;
     
     memset(visibleCells, false, sizeof(visibleCells));
 
@@ -127,16 +128,16 @@ void World::rayCast()
     {
         // every time this ray advances 'u' units in x direction,
         // it also advanced 'v' units in y direction
-        Real uu = (u < 0) ? -u : u;
-        Real vv = (v < 0) ? -v : v;
-        Real duu = 1 / uu;
-        Real dvv = 1 / vv;
-        int stepx = (u < 0) ? -1 : 1;
-        int stepy = (v < 0) ? -1 : 1;
+        const Real uu = (u < 0) ? -u : u;
+        const Real vv = (v < 0) ? -v : v;
+        const Real duu = 1 / uu;
+        const Real dvv = 1 / vv;
+        const int stepx = (u < 0) ? -1 : 1;
+        const int stepy = (v < 0) ? -1 : 1;
         
         // the cell in the map that we need to check
-        Real px = player.getPos().x;
-        Real py = player.getPos().y;
+        const Real px = player.getPos().x;
+        const Real py = player.getPos().y;
         int mapx = static_cast<int>(px);
         int mapy = static_cast<int>(py);
         
@@ -461,19 +462,100 @@ void World::handleInput()
         else if (ch == 'd')
             player.setAngle(player.getAngle() - (0.025 * M_PI));
         else if (ch == 'w' || ch == 's')
-        {
-            const Real step = (ch == 's') ? -0.25 : 0.25;
-            Real dx = cos(player.getAngle()) * step;
-            Real dy = sin(player.getAngle()) * step;
-            Vec2D pos = player.getPos() + Vec2D(dx, dy);
-            int xi = static_cast<int>(pos.x);
-            int yi = static_cast<int>(pos.y);
-            if (worldMap[yi][xi] == 0)
-                player.setPos(pos);
-        }
+            move(&player, (ch == 's') ? -0.25 : 0.25);
         else
             dirty = false;
     }
+}
+
+bool World::isBlocking(int x, int y) const
+{
+    // UNDONE: check for blocking sprites
+    return (x < 0 || x >= WORLD_SIZE || y < 0 || y >= WORLD_SIZE || worldMap[y][x] != 0);
+}
+
+// Based on https://dev.opera.com/articles/3d-games-with-canvas-and-raycasting-part-2/
+Vec2D World::checkCollision(const Vec2D &from, const Vec2D &to, Real radius) const
+{
+    const int maptox = static_cast<int>(to.x);
+    const int maptoy = static_cast<int>(to.y);
+
+    if (isBlocking(maptox, maptoy))
+        return from;
+
+    Vec2D pos = to;
+
+    const bool blocktop = isBlocking(maptox, maptoy-1);
+    const bool blockbottom = isBlocking(maptox, maptoy+1);
+    const bool blockleft = isBlocking(maptox-1, maptoy);
+    const bool blockright = isBlocking(maptox+1, maptoy);
+
+    if (blocktop && pos.y - maptoy < radius)
+        pos.y = maptoy + radius;
+    if (blockbottom && maptoy+1 - pos.y < radius)
+        pos.y = maptoy + 1 - radius;
+    if (blockleft && pos.x - maptox < radius)
+        pos.x = maptox + radius;
+    if (blockright && maptox+1 - pos.x < radius)
+        pos.x = maptox + 1 - radius;
+
+    // is tile to the top-left a wall
+    if (isBlocking(maptox-1, maptoy-1) && !(blocktop && blockleft))
+    {
+        const Real dx = pos.x - maptox;
+        const Real dy = pos.y - maptoy;
+        if (dx*dx+dy*dy < radius*radius)
+        {
+            if (dx*dx > dy*dy)
+                pos.x = maptox + radius;
+            else
+                pos.y = maptoy + radius;
+        }
+    }
+
+    // is tile to the top-right a wall
+    if (isBlocking(maptox+1, maptoy-1) && !(blocktop && blockright))
+    {
+        const Real dx = pos.x - (maptox+1);
+        const Real dy = pos.y - maptoy;
+        if (dx*dx+dy*dy < radius*radius)
+        {
+            if (dx*dx > dy*dy)
+                pos.x = maptox + 1 - radius;
+            else
+                pos.y = maptoy + radius;
+        }
+    }
+
+    // is tile to the bottom-left a wall
+    if (isBlocking(maptox-1, maptoy+1) && !(blockbottom && blockleft))
+    {
+        const Real dx = pos.x - maptox;
+        const Real dy = pos.y - (maptoy+1);
+        if (dx*dx+dy*dy < radius*radius)
+        {
+            if (dx*dx > dy*dy)
+                pos.x = maptox + radius;
+            else
+                pos.y = maptoy + 1 - radius;
+        }
+    }
+
+    // is tile to the bottom-right a wall
+    if (isBlocking(maptox+1, maptoy+1) && !(blockbottom && blockright))
+    {
+        const Real dx = pos.x - (maptox+1);
+        const Real dy = pos.y - (maptoy+1);
+        if (dx*dx+dy*dy < radius*radius)
+        {
+            if (dx*dx > dy*dy)
+                pos.x = maptox + 1 - radius;
+            else
+                pos.y = maptoy + 1 - radius;
+        }
+    }
+
+    return pos;
 }
 
 void World::addStaticEntity(const Vec2D &pos, Entity::Flags flags, Sprite sprite)
@@ -485,6 +567,18 @@ void World::addStaticEntity(const Vec2D &pos, Entity::Flags flags, Sprite sprite
     entities[entityCount] = &staticEntityStore[staticEntityCount];
 
     ++staticEntityCount;
+    ++entityCount;
+}
+
+void World::addEnemy(const Vec2D &pos, Sprite sprite)
+{
+    enemyStore[enemyCount].setPos(pos);
+    enemyStore[enemyCount].setFlags(Entity::FLAG_ENABLED | Entity::FLAG_ROTATIONAL_SPRITE);
+    enemyStore[enemyCount].setSprite(sprite);
+
+    entities[entityCount] = &enemyStore[enemyCount];
+
+    ++enemyCount;
     ++entityCount;
 }
 
@@ -533,11 +627,22 @@ void World::update()
 {
     handleInput();
 
+    for (int i=0; i<enemyCount; ++i)
+        enemyStore[i].think();
+
     if (dirty)
     {
         render();
         dirty = false;
     }
+}
+
+void World::move(Object *obj, Real speed)
+{
+    const Real dx = cos(obj->getAngle()) * speed;
+    const Real dy = sin(obj->getAngle()) * speed;
+    const Vec2D pos = obj->getPos() + Vec2D(dx, dy);
+    obj->setPos(checkCollision(obj->getPos(), pos, 0.35)); // UNDONE: magic nr
 }
 
 
