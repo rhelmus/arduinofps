@@ -8,72 +8,11 @@
 #include <alloc/spiram_alloc.h>
 
 #include "defs.h"
+#include "entity.h"
 #include "gfx.h"
+#include "utils.h"
 
 using namespace virtmem;
-
-struct Vec2D
-{
-    Real x; Real y;
-
-    Vec2D(Real _x, Real _y) : x(_x), y(_y) { }
-    Vec2D(void) = default;
-
-    Vec2D operator+(const Vec2D &v) const { return Vec2D(x + v.x, y + v.y); }
-    Vec2D operator-(const Vec2D &v) const { return Vec2D(x - v.x, y - v.y); }
-    Vec2D operator*(const Vec2D &v) const { return Vec2D(x * v.x, y * v.y); }
-};
-
-class Object
-{
-    Vec2D pos;
-    Real angle = 0.0;
-
-public:
-    Object(void) : pos(Vec2D(0.0, 0.0)) { }
-
-    void setPos(const Vec2D &v) { pos = v; }
-    void setPos(Real x, Real y) { pos.x = x; pos.y = y; }
-    Vec2D getPos(void) const { return pos; }
-    void setAngle(Real a) { angle = a; }
-    Real getAngle(void) const { return angle; }
-};
-
-class Entity : public Object
-{
-public:
-    enum Flags
-    {
-        FLAG_NONE = 1<<0,
-        FLAG_ENABLED = 1<<1,
-        FLAG_ROTATIONAL_SPRITE = 1<<2,
-        FLAG_VSIBILE = 1<<3, // set automatically when visible
-    };
-
-private:
-    int flags = FLAG_NONE;
-    Sprite sprite = SPRITE_NONE;
-
-public:
-    void setFlags(int f) { flags = f; }
-    void setFlag(Flags f) { flags |= f; }
-    void unsetFlag(Flags f) { flags &= ~f; }
-    int getFlags(void) const { return flags; }
-    void setSprite(Sprite s) { sprite = s; }
-    Sprite getSprite(void) const { return sprite; }
-};
-
-class Player : public Object
-{
-public:
-    Player(void) { }
-};
-
-class Enemy : public Entity
-{
-public:
-    void think(void);
-};
 
 class World
 {
@@ -101,12 +40,7 @@ class World
 
     SPIRAMVAlloc valloc;
 
-    Player player;
-    Entity staticEntityStore[MAX_STATIC_ENTITIES];
-    Enemy enemyStore[MAX_ENEMIES];
     Entity *entities[MAX_STATIC_ENTITIES + MAX_ENEMIES];
-    uint8_t staticEntityCount = 0;
-    uint8_t enemyCount = 0;
     uint8_t entityCount = 0;
 
     CachedSprite cachedSprites[SPRITE_END];
@@ -134,23 +68,16 @@ class World
     void drawWorld(void);
     void drawEntities(void);
     void render(void);
-    void handleInput(void);
     bool isBlocking(int x, int y) const;
-    Vec2D checkCollision(const Vec2D &from, const Vec2D &to, Real radius) const;
-    void addStaticEntity(const Vec2D &pos, Entity::Flags flags, Sprite sprite);
-    void addEnemy(const Vec2D &pos, Sprite sprite);
 
 public:
     World(void);
 
     void setup(void);
     void update(void);
-
-    const Player &getPlayer(void) const { return player; }
-    void move(Object *obj, Real speed);
     void markDirty(void) { dirty = true; }
+    Vec2D checkCollision(const Vec2D &from, const Vec2D &to, Real radius) const;
+    void addEntity(Entity *e);
 };
-
-extern World world;
 
 #endif // RAYCAST_H

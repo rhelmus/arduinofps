@@ -5,3 +5,11 @@ utils.cpp
 utils.h
 defs.h
 enemy.cpp
+entity.h
+player.h
+player.cpp
+enemy.h
+entity.cpp
+game.h
+game.cpp
+world.cpp
