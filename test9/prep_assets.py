@@ -86,6 +86,8 @@ if __name__ == '__main__':
         os.mkdir(gdir)
 
     with open("gfx.h", "w") as gfxheader:
+        print >>gfxheader, "#ifndef GFX_H\n#define GFX_H"
+        print >>gfxheader, "\n#include <stdint.h>"
         print >>gfxheader, "\nenum Sprite\n{"
         for e in gfxEntries:
             print >>gfxheader, ("    SPRITE_%s,") % os.path.splitext(os.path.basename(e))[0].upper()
@@ -108,4 +110,5 @@ struct SpriteInfo
             a.make()
             print >>gfxheader, ("    {{ \"{0}\", {1}, {2}, {3}, {4}, {5} }},").format(outf, a.width, a.height, fmt, a.size, a.csize)
         print >>gfxheader, "};"
+        print >>gfxheader, "\n#endif"
 

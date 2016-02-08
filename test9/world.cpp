@@ -107,8 +107,8 @@ void World::rayCast()
     ++rayFrameNumber;
 
     // cast all rays here
-    const Real sina = sin(player.getAngle());
-    const Real cosa = cos(player.getAngle());
+    const Real sina = sin(game.getPlayer().getAngle());
+    const Real cosa = cos(game.getPlayer().getAngle());
     Real u = cosa - sina;
     Real v = sina + cosa;
     const Real du = 2 * sina / SCREEN_WIDTH;
@@ -128,8 +128,8 @@ void World::rayCast()
         const int stepy = (v < 0) ? -1 : 1;
 
         // the cell in the map that we need to check
-        const Real px = player.getPos().x;
-        const Real py = player.getPos().y;
+        const Real px = game.getPlayer().getPos().x;
+        const Real py = game.getPlayer().getPos().y;
         int mapx = static_cast<int>(px);
         int mapy = static_cast<int>(py);
 
@@ -224,10 +224,10 @@ void World::castEntities()
         if (!visibleCells[mapy][mapx])
             continue;
 
-        const Real dx = entities[e]->getPos().x - player.getPos().x;
-        const Real dy = entities[e]->getPos().y - player.getPos().y;
+        const Real dx = entities[e]->getPos().x - game.getPlayer().getPos().x;
+        const Real dy = entities[e]->getPos().y - game.getPlayer().getPos().y;
         const Real dist = sqrt(dx*dx + dy*dy); // sqrt needed?
-        const Real sangle = atan2(dy, dx) - player.getAngle();
+        const Real sangle = atan2(dy, dx) - game.getPlayer().getAngle();
         const Real size = SCREEN_HEIGHT / (cos(sangle) * dist);
         const Real scalef = size / TEXTURE_SIZE;
 
@@ -247,7 +247,8 @@ void World::castEntities()
 
             int s = entities[e]->getSprite();
             if (entities[e]->getFlags() & Entity::FLAG_ROTATIONAL_SPRITE)
-                s += (Sprite)getEntityDrawRotation(player.getAngle(), entities[e]->getAngle(), sxl);
+                s += (Sprite)getEntityDrawRotation(game.getPlayer().getAngle(),
+                                                   ((MovableEntity *)entities[e])->getAngle(), sxl);
 
             spriteGfxInfo[s].lastRayFrameNumber = rayFrameNumber; // mark it visible during this frame
             if (spriteGfxInfo[s].gfxIndex == SPRITE_NOT_LOADED) // not yet loaded into GD2 memory?
@@ -398,7 +399,8 @@ void World::drawEntities()
 
         int s = entities[e]->getSprite();
         if (entities[e]->getFlags() & Entity::FLAG_ROTATIONAL_SPRITE)
-            s += getEntityDrawRotation(player.getAngle(), entities[e]->getAngle(),
+            s += getEntityDrawRotation(game.getPlayer().getAngle(),
+                                       ((MovableEntity *)entities[e])->getAngle(),
                                        entityDrawInfo[e].spriteX);
 
         initSprite(static_cast<Sprite>(s), entityDrawInfo[e].spriteW*2, (SCREEN_HEIGHT - entityDrawInfo[e].spriteY) * 2);

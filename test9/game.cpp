@@ -1,4 +1,8 @@
 #include "Arduino.h"
+#include <EEPROM.h>
+#include <SPI.h>
+#include <GD2.h>
+
 #include "game.h"
 
 Game game;

@@ -2,6 +2,7 @@
 #define ENTITY
 
 #include "defs.h"
+#include "gfx.h"
 #include "utils.h"
 
 class Entity

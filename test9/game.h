@@ -2,6 +2,7 @@
 #define GAME_H
 
 #include "defs.h"
+#include "enemy.h"
 #include "player.h"
 #include "world.h"
 
@@ -24,8 +25,8 @@ public:
     void setup(void);
     void update(void);
 
-    World &getWorld(void) const { return world; }
-    Player &getPlayer(void) const { return player; }
+    World &getWorld(void) { return world; }
+    Player &getPlayer(void) { return player; }
 };
 
 extern Game game;

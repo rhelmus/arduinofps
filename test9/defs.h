@@ -1,6 +1,8 @@
 #ifndef DEFS_H
 #define DEFS_H
 
+#include "math.h"
+
 enum
 {
     SCREEN_WIDTH = 200,
