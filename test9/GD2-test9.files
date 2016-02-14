@@ -13,3 +13,7 @@ entity.cpp
 game.h
 game.cpp
 world.cpp
+raycast.h
+raycast.cpp
+render.h
+render.cpp
