@@ -65,7 +65,7 @@ void Render::loadSprites(uint32_t rayframe)
     {
         if (spritesToLoadCount > MAX_LOADED_SPRITES)
         {
-            Serial.printf("WARNING!! Too many sprites need be loaded (%d, max: %d)\n",
+            debugf("WARNING!! Too many sprites need be loaded (%d, max: %d)\n",
                           spritesToLoadCount, MAX_LOADED_SPRITES);
             spritesToLoadCount = MAX_LOADED_SPRITES;
         }
@@ -99,7 +99,7 @@ void Render::loadSprites(uint32_t rayframe)
             loadedGDSprites[gdind] = spritesToLoad[s];
 
             // load actual sprite
-            Serial.printf("LOAD: %s @ %d\n", sprites[spritesToLoad[s]].file, gdind);
+            debugf("LOAD: %s @ %d\n", sprites[spritesToLoad[s]].file, gdind);
 
             const uint32_t begintime = millis();
             GD.cmd_inflate(spr * SPRITE_BLOCK);
@@ -121,7 +121,7 @@ void Render::loadSprites(uint32_t rayframe)
             }
 
             GD.resume();
-            Serial.printf("load time: %d\n", millis() - begintime);
+            debugf("load time: %d\n", millis() - begintime);
         }
 
         spritesToLoadCount = 0;
@@ -165,7 +165,7 @@ void Render::drawStripe(int x, float dist, Sprite texture, int col)
     GD.StencilFunc(ALWAYS, stencilFromDist(dist), 255);
 
     GD.Vertex2f(x*2 * 16, 0 * 16);
-//    Serial.printf("x/y/h/tex/col: %d/%d/%d/%d/%d\n", x, y, h, texture, col);
+//    debugf("x/y/h/tex/col: %d/%d/%d/%d/%d\n", x, y, h, texture, col);
 }
 
 void Render::beginRender()
@@ -252,12 +252,11 @@ void Render::endRender()
 {
     GD.finish();
 
-    Serial.print("draw buffer: ");
-    Serial.println(GD.rd16(REG_CMD_DL));
+    debugf("draw buffer: %d\n", GD.rd16(REG_CMD_DL));
 
     GD.swap();
 
-    Serial.print("render time: "); Serial.println(millis() - renderStartTime);
+    debugf("render time: %u\n", millis() - renderStartTime);
 }
 
 void Render::setup(const RayCast::RayCastInfo *rinfo, const RayCast::EntityCastInfo *einfo,
@@ -286,7 +285,7 @@ void Render::setup(const RayCast::RayCastInfo *rinfo, const RayCast::EntityCastI
         loadGDFileInVMem(sprites[i].file, cachedSprites[i]);
     }
 
-    Serial.printf("load time: %d\n", millis() - begintime2);
+    debugf("load time: %d\n", millis() - begintime2);
 
 //    SPI.endTransaction();
     SPIFIFO.begin(6, SPI_CLOCK_24MHz);

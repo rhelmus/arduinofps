@@ -23,4 +23,7 @@ struct Vec2D
 bool loadGDFileInVMem(const char *filename, VPtr<uint8_t, SPIRAMVAlloc> ptr);
 uint8_t getEntityDrawRotation(Real plang, Real enang, int16_t ex);
 
+#define debugf Serial.printf
+
+
 #endif // UTILS_H

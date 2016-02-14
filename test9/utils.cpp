@@ -48,7 +48,7 @@ bool loadGDFileInVMem(const char *filename, VPtr<uint8_t, SPIRAMVAlloc> ptr)
         {
             VPtrLock<VPtr<uint8_t, SPIRAMVAlloc>> lock = makeVirtPtrLock(ptr, size, false);
             const uint32_t lockedsize = lock.getLockSize();
-//            Serial.printf("%s: lockedsize: %d\n", filename, (int)lockedsize);
+//            debugf("%s: lockedsize: %d\n", filename, (int)lockedsize);
             sdf.read(*lock, lockedsize);
             size -= lockedsize;
             ptr += lockedsize;
@@ -71,6 +71,6 @@ uint8_t getEntityDrawRotation(Real plang, Real enang, int16_t ex)
     while (sangle > 360) sangle -= 360;
     while (sangle < 0) sangle += 360;
 
-//    Serial.printf("rot: %d\n", (int)(sangle / (360 / 8)));
+//    debugf("rot: %d\n", (int)(sangle / (360 / 8)));
     return sangle / (360 / 8);
 }
