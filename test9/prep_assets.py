@@ -78,20 +78,23 @@ class BaseAsset(gd2.prep.AssetBin):
 
         open(self.asset_file, "wb").write(commandblock)
 
+def writeSpritesEnum(f):
+    print >>f, "enum Sprite\n{"
+    for e in gfxEntries:
+        print >>f, ("    SPRITE_%s,") % os.path.splitext(os.path.basename(e))[0].upper()
+    print >>f, "    SPRITE_END,\n    SPRITE_NONE\n};"
 
-if __name__ == '__main__':
+def writeGfxHeader():
     gdir = "gfx"
 
     if not os.path.exists(gdir):
         os.mkdir(gdir)
 
     with open("gfx.h", "w") as gfxheader:
-        print >>gfxheader, "#ifndef GFX_H\n#define GFX_H"
-        print >>gfxheader, "\n#include <stdint.h>"
-        print >>gfxheader, "\nenum Sprite\n{"
-        for e in gfxEntries:
-            print >>gfxheader, ("    SPRITE_%s,") % os.path.splitext(os.path.basename(e))[0].upper()
-        print >>gfxheader, "    SPRITE_END,\n    SPRITE_NONE\n};"
+        print >>gfxheader, "#if !defined(GFX_H) && defined(ARDUINO)\n#define GFX_H"
+        print >>gfxheader, "\n#include <stdint.h>\n"
+
+        writeSpritesEnum(gfxheader)
 
         print >>gfxheader, """
 struct SpriteInfo
@@ -111,4 +114,29 @@ struct SpriteInfo
             print >>gfxheader, ("    {{ \"{0}\", {1}, {2}, {3}, {4}, {5} }},").format(outf, a.width, a.height, fmt, a.size, a.csize)
         print >>gfxheader, "};"
         print >>gfxheader, "\n#endif"
+        print >>gfxheader, "\n#include \"gfxqt.h\""
 
+def writeGfxHeaderQt():
+    with open("gfxqt.h", "w") as gfxheader:
+        print >>gfxheader, "#if !defined(GFXQT_H) && !defined(ARDUINO)\n#define GFXQT_H\n"
+
+        writeSpritesEnum(gfxheader)
+
+        print >>gfxheader, """
+struct SpriteInfo
+{
+    const char *file;
+    int width, height;
+};"""
+
+        print >>gfxheader, ("\nconst SpriteInfo sprites[SPRITE_END]\n{")
+        for e, f in gfxEntries.iteritems():
+            (w, h) = Image.open(f).size
+            print >>gfxheader, ("    {{ \"{0}\", {1}, {2} }},").format(f, w, h)
+        print >>gfxheader, "};"
+        print >>gfxheader, "\n#endif"
+
+
+if __name__ == '__main__':
+    writeGfxHeader()
+    writeGfxHeaderQt()

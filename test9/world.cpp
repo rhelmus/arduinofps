@@ -63,7 +63,7 @@ void World::update()
         renderer.render(rayCaster.getRayFrameNumber());
         dirty = false;
 
-        debugf("update time: %u\n", getMillis() - start);
+        debugf("update time: %u\n", static_cast<uint32_t>(getMillis()) - start);
     }
 }
 
