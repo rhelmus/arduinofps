@@ -2,6 +2,8 @@
 #include "game.h"
 #include "raycast.h"
 
+#include <string.h>
+
 void RayCast::rayCast(const uint8_t world[][8])
 {
     memset(visibleCells, false, sizeof(visibleCells));
@@ -92,7 +94,11 @@ void RayCast::rayCast(const uint8_t world[][8])
         }
 
         int col = static_cast<int>((1.0 - texofs) * TEXTURE_SIZE);
-        col = constrain(col, 0, TEXTURE_SIZE - 1);
+
+        if (col < 0)
+            col = 0;
+        else if (col > TEXTURE_SIZE-1)
+            col = TEXTURE_SIZE - 1;
         texture = (texture - 1) % TEXTURE_COUNT;
 
         rayCastInfo[ray].dark = dark;

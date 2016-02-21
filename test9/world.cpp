@@ -56,14 +56,14 @@ void World::update()
 {
     if (dirty)
     {
-        const uint32_t start = millis();
+        const uint32_t start = getMillis();
 
         rayCaster.rayCast(worldMap);
         rayCaster.castEntities(entities, entityCount);
         renderer.render(rayCaster.getRayFrameNumber());
         dirty = false;
 
-        debugf("update time: %u\n", millis() - start);
+        debugf("update time: %u\n", getMillis() - start);
     }
 }
 

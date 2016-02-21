@@ -1,3 +1,5 @@
+#ifdef ARDUINO
+
 #include <EEPROM.h>
 #include <SPI.h>
 #include <SPIFIFO.h>
@@ -16,6 +18,34 @@ inline int stencilFromDist(float dist)
     return min(static_cast<int>(dist * 255.0 / WORLD_MAX_LENGTH + 0.5), 255);
 }
 
+bool loadGDFileInVMem(const char *filename, VPtr<uint8_t, SPIRAMVAlloc> ptr)
+{
+    GD.__end();
+
+    SdFile sdf;
+    bool ret = false;
+
+    if (sdf.open(filename, O_READ))
+    {
+        ret = true;
+        uint32_t size = sdf.fileSize();
+
+        while (size)
+        {
+            VPtrLock<VPtr<uint8_t, SPIRAMVAlloc>> lock = makeVirtPtrLock(ptr, size, false);
+            const uint32_t lockedsize = lock.getLockSize();
+//            debugf("%s: lockedsize: %d\n", filename, (int)lockedsize);
+            sdf.read(*lock, lockedsize);
+            size -= lockedsize;
+            ptr += lockedsize;
+        }
+
+        sdf.close();
+    }
+
+    GD.resume();
+    return ret;
+}
 
 }
 
@@ -266,7 +296,7 @@ void Render::setup(const RayCast::RayCastInfo *rinfo, const RayCast::EntityCastI
     entityCastInfo = einfo;
     entities = e;
 
-    GD.__end();
+//    GD.__end();
 //    SPI.endTransaction();
 
     Serial.println("Init SD");
@@ -288,9 +318,12 @@ void Render::setup(const RayCast::RayCastInfo *rinfo, const RayCast::EntityCastI
     debugf("load time: %d\n", millis() - begintime2);
 
 //    SPI.endTransaction();
-    SPIFIFO.begin(6, SPI_CLOCK_24MHz);
+//    SPIFIFO.begin(6, SPI_CLOCK_24MHz);
 //    SPI.beginTransaction(SPISettings(/*3000000*/20000000, MSBFIRST, SPI_MODE0));
-    GD.resume();
+//    GD.resume();
+
+    Serial.println("Init GD");
+    GD.begin(~GD_STORAGE); // use SD fat lib instead of GD2 SD library
 }
 
 void Render::render(uint32_t rayframe)
@@ -302,3 +335,5 @@ void Render::render(uint32_t rayframe)
     renderEntities();
     endRender();
 }
+
+#endif

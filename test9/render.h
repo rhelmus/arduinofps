@@ -1,6 +1,8 @@
 #ifndef RENDER_H
 #define RENDER_H
 
+#ifdef ARDUINO
+
 #include <virtmem.h>
 #include <alloc/spiram_alloc.h>
 #include <SdFat.h>
@@ -61,5 +63,11 @@ public:
     void setEntityCount(int ecount) { entityCount = ecount; }
     void render(uint32_t rayframe);
 };
+
+#else
+
+#include "render-qt.h"
+
+#endif
 
 #endif // RENDER_H

@@ -1,8 +1,3 @@
-#include "Arduino.h"
-#include <EEPROM.h>
-#include <SPI.h>
-#include <GD2.h>
-
 #include "game.h"
 
 Game game;
@@ -18,6 +13,7 @@ Game::Game()
 
 void Game::handleInput()
 {
+#ifdef ARDUINO
     if (Serial.available())
     {
         bool dirty = true;
@@ -35,6 +31,7 @@ void Game::handleInput()
         if (dirty)
             world.markDirty();
     }
+#endif
 }
 
 void Game::addStaticEntity(const Vec2D &pos, Entity::Flags flags, Sprite sprite)
@@ -57,10 +54,7 @@ void Game::addEnemy(const Vec2D &pos, Sprite sprite)
 
 void Game::setup()
 {
-    Serial.println("Init GD");
-    GD.begin(~GD_STORAGE); // use SD fat lib instead of GD2 SD library
-
-    Serial.println("Init world");
+    debugf("Init world\n");
     world.setup();
 }
 
